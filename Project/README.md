@@ -389,6 +389,22 @@ The results should be saved into the `GOLD` schema as aggregate tables, for exam
 - `GOLD.T3_TRIPS_BY_MONTH`
 - `GOLD.T3_TRIPS_BY_HOUR`
 
+- REAL TASK STARTS HERE 
+
+In this part we perform introductory exploratory data analysis for all four datasets.
+We start from the cleaned `SILVER` views that were created in T2:
+
+- `SILVER.YELLOW_TRIPS_CLEAN`
+- `SILVER.GREEN_TRIPS_CLEAN`
+- `SILVER.FHV_TRIPS_CLEAN`
+- `SILVER.FHVHV_TRIPS_CLEAN`
+
+These views already remove the most problematic rows based on the data quality checks from T2. For FHV, the clean view is intentionally less strict, because the dataset contains many problematic dropoff timestamps and missing locations.
+
+The resutling tables are apropriatley saved in the `GOLD` schema as aggregate tables.
+
+
+
 ### T4. MATIC
 
 ### T5. MATIJA
