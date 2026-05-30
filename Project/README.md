@@ -375,33 +375,83 @@ create or replace TABLE BIGDATA_TAXI_MZMB.SILVER.FHVHV_TRIPS cluster by (pickup_
 
 ### T3. MATIJA
 
-For exploratory analysis, the work should start from the cleaned `SILVER` views that were created in T2:
+- Introductory exploratory data analysis for all four datasets, starting from the cleaned `SILVER` views created in T2.
+- All aggregations are stored in the `GOLD` schema. SQL is in `scripts/t3/t3.sql`, visualizations in `scripts/t3/t3_visualizations.ipynb`.
+- Analyses cover: temporal aggregations (year-month, hour of day, day of week), spatial aggregations (top pickup/dropoff locations and OD pairs), trip characteristics (distance, duration, fare), COVID-19 impact, payment types, Uber vs Lyft breakdown, and cross-dataset similarity.
 
-- `SILVER.YELLOW_TRIPS_CLEAN`
-- `SILVER.GREEN_TRIPS_CLEAN`
-- `SILVER.FHV_TRIPS_CLEAN`
-- `SILVER.FHVHV_TRIPS_CLEAN`
+#### Dataset overview
 
-These views already remove the most problematic rows based on the data quality checks from T2. For FHV, the clean view is intentionally less strict, because the dataset contains many problematic dropoff timestamps and missing locations.
+| Dataset | Total trips | Years |
+|---------|------------|-------|
+| Yellow taxi | 1.29B | 2012–2026 |
+| Green taxi | 0.08B | 2014–2026 |
+| FHV | 0.80B | 2015–2026 |
+| FHVHV (Uber/Lyft) | 1.52B | 2019–2026 |
 
-The results should be saved into the `GOLD` schema as aggregate tables, for example:
+![alt text](images/t3/total_trip_count.png)
 
-- `GOLD.T3_TRIPS_BY_MONTH`
-- `GOLD.T3_TRIPS_BY_HOUR`
+#### Temporal analysis
 
-- REAL TASK STARTS HERE 
+- Monthly volume shows clear structural shifts: Yellow taxi declining steadily from ~15M/month in 2012 to ~3–4M today, FHV peaking around 2019 and collapsing after the FHVHV regulation (Feb 2019) took effect, and FHVHV taking over as the dominant mode after 2019. The COVID-19 crash in March–April 2020 is visible across all datasets.
 
-In this part we perform introductory exploratory data analysis for all four datasets.
-We start from the cleaned `SILVER` views that were created in T2:
+![alt text](images/t3/monthly_volume.png)
 
-- `SILVER.YELLOW_TRIPS_CLEAN`
-- `SILVER.GREEN_TRIPS_CLEAN`
-- `SILVER.FHV_TRIPS_CLEAN`
-- `SILVER.FHVHV_TRIPS_CLEAN`
+- Hourly patterns are nearly identical across all four datasets: minimum at ~5am, morning peak at 8am, and a broader evening peak at 18–19h. Normalized cosine similarity between all pairs is ≥ 0.99.
 
-These views already remove the most problematic rows based on the data quality checks from T2. For FHV, the clean view is intentionally less strict, because the dataset contains many problematic dropoff timestamps and missing locations.
+![alt text](images/t3/hour_dist.png)
 
-The resutling tables are apropriatley saved in the `GOLD` schema as aggregate tables.
+- Day-of-week distributions are also very consistent: Friday and Saturday are the busiest days across all datasets, Monday is the quietest. All pairwise cosine similarities are 1.00.
+
+![alt text](images/t3/day_dist.png)
+
+#### COVID-19 impact analysis
+
+- All datasets dropped sharply from March 2020. Yellow and Green each lost ~90–95% of trips in April 2020 compared to April 2019. FHVHV dropped ~80%. FHV shows an unusual 2019 baseline because most FHV data in 2019 is from January only (regulatory cutoff).
+
+![alt text](images/t3/covid_effect.png)
+
+![alt text](images/t3/covid_change.png)
+
+#### Spatial analysis
+
+- Yellow taxi pickups are concentrated in Manhattan (top zones: 237, 161, 236, 162, 230). Green taxi is almost exclusively in the outer boroughs (top zones: 74, 75, 41, 97). FHV and FHVHV have a much wider geographic spread, with zone 264 (unknown/outside NYC) dominating FHV early years.
+- Yellow–Green spatial cosine similarity is only 0.08 — they serve almost entirely different parts of the city.
+
+![alt text](images/t3/spactial_anal.png)
+
+- Top OD pairs reveal self-loops (same zone pickup and dropoff) are very common, especially for Yellow (264→264: ~16M trips) and FHV (264→265: ~9M). Green taxi shows more local neighborhood patterns in the outer boroughs.
+
+![alt text](images/t3/pairs.png)
+
+#### Trip characteristics
+
+- Average fare and total amount have increased significantly over time for all datasets, especially from 2022 onwards. Yellow and Green maintain similar per-trip distances (~2.5–3 miles), while FHVHV averages slightly longer trips. Average trip duration is roughly 15–20 minutes across all three datasets.
+
+![alt text](images/t3/characteristics.png)
+
+#### Payment type distribution
+
+- Yellow taxi: 62.9% credit card, 35.1% cash. Green taxi is almost evenly split: 50.1% cash, 49.4% credit card — reflecting the different customer base in outer boroughs where cash use is higher.
+
+![alt text](images/t3/payment.png)
+
+#### Uber vs Lyft (FHVHV)
+
+- Uber (`HV0003`) dominates throughout, with Lyft (`HV0005`) holding a smaller share. Both providers show similar trends in average distance, duration, and fare. Driver pay and tips for both have grown steadily since 2021.
+
+![alt text](images/t3/uber_lyft.png)
+
+#### Cross-dataset similarity
+
+- Similarity was measured across four metrics: cosine similarity on hourly distributions, day-of-week distributions, and pickup location distributions, plus Pearson correlation on monthly trip volumes.
+- **Temporal patterns (hourly and DOW)** are essentially identical across all four datasets — all cosine similarities ≥ 0.99.
+- **Spatial distributions** differ significantly: Yellow–Green similarity is 0.08 (completely different service areas), while FHV–FHVHV is 0.85 (strongly overlapping).
+- **Monthly volume correlation**: Yellow–Green have the highest Pearson correlation (0.95), as both are regulated taxi services declining together. FHVHV–Green have the lowest (0.33), as they operate in opposite directions over time.
+- Overall, FHV and FHVHV are the most similar pair (avg 0.878), while FHVHV and Green are the least similar (avg 0.701).
+
+![alt text](images/t3/similarity.png)
+
+![alt text](images/t3/all_similarity.png)
 
 
 
