@@ -1,0 +1,597 @@
+--------------------------------------------------------------------------------
+-- T3: Exploratory data analysis
+--
+-- This script performs introductory EDA on all four cleaned datasets:
+--   SILVER.YELLOW_TRIPS_CLEAN
+--   SILVER.GREEN_TRIPS_CLEAN
+--   SILVER.FHV_TRIPS_CLEAN
+--   SILVER.FHVHV_TRIPS_CLEAN
+--
+-- Results are stored in GOLD schema as aggregate tables.
+-- Analyses include:
+--   1. Temporal aggregations (by year-month, hour of day, day of week)
+--   2. Spatial aggregations (top pickup/dropoff locations)
+--   3. Trip characteristics (distance, duration, fare statistics)
+--   4. Cross-dataset similarity analysis
+--------------------------------------------------------------------------------
+
+USE WAREHOUSE BIGDATA_MZMB_WH;
+USE DATABASE BIGDATA_TAXI_MZMB;
+
+--------------------------------------------------------------------------------
+-- 1. TEMPORAL ANALYSIS: Trips by year-month (all datasets combined + separate)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_TRIPS_BY_MONTH AS
+WITH yellow AS (
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    GROUP BY PICKUP_YEAR, PICKUP_MONTH
+),
+green AS (
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    GROUP BY PICKUP_YEAR, PICKUP_MONTH
+),
+fhv AS (
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN
+    GROUP BY PICKUP_YEAR, PICKUP_MONTH
+),
+fhvhv AS (
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN
+    GROUP BY PICKUP_YEAR, PICKUP_MONTH
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+UNION ALL SELECT * FROM fhv
+UNION ALL SELECT * FROM fhvhv
+ORDER BY DATASET, PICKUP_YEAR, PICKUP_MONTH;
+
+--------------------------------------------------------------------------------
+-- 2. TEMPORAL ANALYSIS: Trips by hour of day
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_TRIPS_BY_HOUR AS
+WITH yellow AS (
+    SELECT HOUR(PICKUP_DATETIME) AS PICKUP_HOUR, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    GROUP BY PICKUP_HOUR
+),
+green AS (
+    SELECT HOUR(PICKUP_DATETIME) AS PICKUP_HOUR, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    GROUP BY PICKUP_HOUR
+),
+fhv AS (
+    SELECT HOUR(PICKUP_DATETIME) AS PICKUP_HOUR, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN
+    GROUP BY PICKUP_HOUR
+),
+fhvhv AS (
+    SELECT HOUR(PICKUP_DATETIME) AS PICKUP_HOUR, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN
+    GROUP BY PICKUP_HOUR
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+UNION ALL SELECT * FROM fhv
+UNION ALL SELECT * FROM fhvhv
+ORDER BY DATASET, PICKUP_HOUR;
+
+--------------------------------------------------------------------------------
+-- 3. TEMPORAL ANALYSIS: Trips by day of week
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_TRIPS_BY_DOW AS
+WITH yellow AS (
+    SELECT DAYOFWEEK(PICKUP_DATETIME) AS PICKUP_DOW, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    GROUP BY PICKUP_DOW
+),
+green AS (
+    SELECT DAYOFWEEK(PICKUP_DATETIME) AS PICKUP_DOW, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    GROUP BY PICKUP_DOW
+),
+fhv AS (
+    SELECT DAYOFWEEK(PICKUP_DATETIME) AS PICKUP_DOW, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN
+    GROUP BY PICKUP_DOW
+),
+fhvhv AS (
+    SELECT DAYOFWEEK(PICKUP_DATETIME) AS PICKUP_DOW, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN
+    GROUP BY PICKUP_DOW
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+UNION ALL SELECT * FROM fhv
+UNION ALL SELECT * FROM fhvhv
+ORDER BY DATASET, PICKUP_DOW;
+
+--------------------------------------------------------------------------------
+-- 4. SPATIAL ANALYSIS: Top 20 pickup locations per dataset
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_TOP_PICKUP_LOCATIONS AS
+WITH yellow AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+green AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+fhv AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+fhvhv AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+UNION ALL SELECT * FROM fhv
+UNION ALL SELECT * FROM fhvhv
+ORDER BY DATASET, TRIP_COUNT DESC;
+
+--------------------------------------------------------------------------------
+-- 5. SPATIAL ANALYSIS: Top 20 dropoff locations per dataset
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_TOP_DROPOFF_LOCATIONS AS
+WITH yellow AS (
+    SELECT DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    WHERE DO_LOCATION_ID IS NOT NULL
+    GROUP BY DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+green AS (
+    SELECT DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    WHERE DO_LOCATION_ID IS NOT NULL
+    GROUP BY DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+fhv AS (
+    SELECT DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN
+    WHERE DO_LOCATION_ID IS NOT NULL
+    GROUP BY DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+fhvhv AS (
+    SELECT DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN
+    WHERE DO_LOCATION_ID IS NOT NULL
+    GROUP BY DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+UNION ALL SELECT * FROM fhv
+UNION ALL SELECT * FROM fhvhv
+ORDER BY DATASET, TRIP_COUNT DESC;
+
+--------------------------------------------------------------------------------
+-- 6. SPATIAL ANALYSIS: Full pickup location distribution (all locations, all datasets)
+--    Useful for heatmap / spatial comparison between datasets
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_PICKUP_LOCATION_DIST AS
+WITH yellow AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+),
+green AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+),
+fhv AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+),
+fhvhv AS (
+    SELECT PU_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+UNION ALL SELECT * FROM fhv
+UNION ALL SELECT * FROM fhvhv;
+
+--------------------------------------------------------------------------------
+-- 7. TRIP CHARACTERISTICS: Yellow taxi statistics by year
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_YELLOW_TRIP_STATS AS
+SELECT
+    PICKUP_YEAR,
+    COUNT(*) AS TRIP_COUNT,
+    ROUND(AVG(TRIP_DISTANCE), 2) AS AVG_DISTANCE,
+    ROUND(AVG(DATEDIFF('minute', PICKUP_DATETIME, DROPOFF_DATETIME)), 2) AS AVG_DURATION_MIN,
+    ROUND(AVG(FARE_AMOUNT), 2) AS AVG_FARE,
+    ROUND(AVG(TIP_AMOUNT), 2) AS AVG_TIP,
+    ROUND(AVG(TOTAL_AMOUNT), 2) AS AVG_TOTAL,
+    ROUND(AVG(PASSENGER_COUNT), 2) AS AVG_PASSENGERS
+FROM SILVER.YELLOW_TRIPS_CLEAN
+GROUP BY PICKUP_YEAR
+ORDER BY PICKUP_YEAR;
+
+--------------------------------------------------------------------------------
+-- 8. TRIP CHARACTERISTICS: Green taxi statistics by year
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_GREEN_TRIP_STATS AS
+SELECT
+    PICKUP_YEAR,
+    COUNT(*) AS TRIP_COUNT,
+    ROUND(AVG(TRIP_DISTANCE), 2) AS AVG_DISTANCE,
+    ROUND(AVG(DATEDIFF('minute', PICKUP_DATETIME, DROPOFF_DATETIME)), 2) AS AVG_DURATION_MIN,
+    ROUND(AVG(FARE_AMOUNT), 2) AS AVG_FARE,
+    ROUND(AVG(TIP_AMOUNT), 2) AS AVG_TIP,
+    ROUND(AVG(TOTAL_AMOUNT), 2) AS AVG_TOTAL,
+    ROUND(AVG(PASSENGER_COUNT), 2) AS AVG_PASSENGERS
+FROM SILVER.GREEN_TRIPS_CLEAN
+GROUP BY PICKUP_YEAR
+ORDER BY PICKUP_YEAR;
+
+--------------------------------------------------------------------------------
+-- 9. TRIP CHARACTERISTICS: FHVHV statistics by year
+--    (FHV has limited columns, so we only compute what's available)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_FHVHV_TRIP_STATS AS
+SELECT
+    PICKUP_YEAR,
+    COUNT(*) AS TRIP_COUNT,
+    ROUND(AVG(TRIP_MILES), 2) AS AVG_DISTANCE,
+    ROUND(AVG(TRIP_TIME / 60.0), 2) AS AVG_DURATION_MIN,
+    ROUND(AVG(BASE_PASSENGER_FARE), 2) AS AVG_FARE,
+    ROUND(AVG(TIPS), 2) AS AVG_TIP,
+    ROUND(AVG(DRIVER_PAY), 2) AS AVG_DRIVER_PAY,
+    ROUND(AVG(BASE_PASSENGER_FARE + TOLLS + BCF + SALES_TAX + CONGESTION_SURCHARGE + COALESCE(AIRPORT_FEE, 0) + TIPS), 2) AS AVG_TOTAL
+FROM SILVER.FHVHV_TRIPS_CLEAN
+GROUP BY PICKUP_YEAR
+ORDER BY PICKUP_YEAR;
+
+--------------------------------------------------------------------------------
+-- 10. TRIP CHARACTERISTICS: FHV basic statistics by year
+--     (FHV only has datetime and location columns, so limited analysis)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_FHV_TRIP_STATS AS
+SELECT
+    PICKUP_YEAR,
+    COUNT(*) AS TRIP_COUNT,
+    COUNT(DISTINCT DISPATCHING_BASE_NUM) AS UNIQUE_BASES,
+    COUNT(CASE WHEN PU_LOCATION_ID IS NOT NULL THEN 1 END) AS TRIPS_WITH_PU_LOCATION,
+    COUNT(CASE WHEN DO_LOCATION_ID IS NOT NULL THEN 1 END) AS TRIPS_WITH_DO_LOCATION,
+    ROUND(COUNT(CASE WHEN PU_LOCATION_ID IS NOT NULL THEN 1 END) * 100.0 / COUNT(*), 2) AS PCT_WITH_PU_LOCATION,
+    ROUND(COUNT(CASE WHEN DO_LOCATION_ID IS NOT NULL THEN 1 END) * 100.0 / COUNT(*), 2) AS PCT_WITH_DO_LOCATION
+FROM SILVER.FHV_TRIPS_CLEAN
+GROUP BY PICKUP_YEAR
+ORDER BY PICKUP_YEAR;
+
+--------------------------------------------------------------------------------
+-- 11. TEMPORAL ANALYSIS: Hourly pattern normalized (percentage within each dataset)
+--     Useful for comparing hourly shape between datasets
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_HOURLY_PATTERN_NORMALIZED AS
+WITH hourly AS (
+    SELECT PICKUP_HOUR, TRIP_COUNT, DATASET
+    FROM GOLD.T3_TRIPS_BY_HOUR
+),
+totals AS (
+    SELECT DATASET, SUM(TRIP_COUNT) AS TOTAL_TRIPS
+    FROM hourly
+    GROUP BY DATASET
+)
+SELECT
+    h.DATASET,
+    h.PICKUP_HOUR,
+    h.TRIP_COUNT,
+    ROUND(h.TRIP_COUNT * 100.0 / t.TOTAL_TRIPS, 4) AS PCT_OF_TOTAL
+FROM hourly h
+JOIN totals t ON h.DATASET = t.DATASET
+ORDER BY h.DATASET, h.PICKUP_HOUR;
+
+--------------------------------------------------------------------------------
+-- 12. TEMPORAL ANALYSIS: Monthly trend normalized (year-over-year comparison)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_MONTHLY_TREND AS
+WITH monthly AS (
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN GROUP BY PICKUP_YEAR, PICKUP_MONTH
+    UNION ALL
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN GROUP BY PICKUP_YEAR, PICKUP_MONTH
+    UNION ALL
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN GROUP BY PICKUP_YEAR, PICKUP_MONTH
+    UNION ALL
+    SELECT PICKUP_YEAR, PICKUP_MONTH, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN GROUP BY PICKUP_YEAR, PICKUP_MONTH
+)
+SELECT
+    DATASET,
+    PICKUP_YEAR,
+    PICKUP_MONTH,
+    TRIP_COUNT,
+    DATE_FROM_PARTS(PICKUP_YEAR, PICKUP_MONTH, 1) AS MONTH_DATE
+FROM monthly
+ORDER BY DATASET, PICKUP_YEAR, PICKUP_MONTH;
+
+--------------------------------------------------------------------------------
+-- 13. SIMILARITY ANALYSIS: Hourly profile cosine similarity between dataset pairs
+--     Compares the normalized hourly distribution shapes
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_HOURLY_SIMILARITY AS
+WITH hourly_pct AS (
+    SELECT DATASET, PICKUP_HOUR, PCT_OF_TOTAL
+    FROM GOLD.T3_HOURLY_PATTERN_NORMALIZED
+)
+SELECT
+    a.DATASET AS DATASET_A,
+    b.DATASET AS DATASET_B,
+    ROUND(
+        SUM(a.PCT_OF_TOTAL * b.PCT_OF_TOTAL) /
+        (SQRT(SUM(a.PCT_OF_TOTAL * a.PCT_OF_TOTAL)) * SQRT(SUM(b.PCT_OF_TOTAL * b.PCT_OF_TOTAL)))
+    , 6) AS COSINE_SIMILARITY
+FROM hourly_pct a
+JOIN hourly_pct b ON a.PICKUP_HOUR = b.PICKUP_HOUR AND a.DATASET < b.DATASET
+GROUP BY a.DATASET, b.DATASET
+ORDER BY COSINE_SIMILARITY DESC;
+
+--------------------------------------------------------------------------------
+-- 14. SIMILARITY ANALYSIS: Spatial (pickup location) cosine similarity
+--     Compares which locations each dataset uses most
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_SPATIAL_SIMILARITY AS
+WITH loc_pct AS (
+    SELECT
+        DATASET,
+        PU_LOCATION_ID,
+        TRIP_COUNT * 1.0 / SUM(TRIP_COUNT) OVER (PARTITION BY DATASET) AS PCT
+    FROM GOLD.T3_PICKUP_LOCATION_DIST
+)
+SELECT
+    a.DATASET AS DATASET_A,
+    b.DATASET AS DATASET_B,
+    ROUND(
+        SUM(a.PCT * b.PCT) /
+        (SQRT(SUM(a.PCT * a.PCT)) * SQRT(SUM(b.PCT * b.PCT)))
+    , 6) AS COSINE_SIMILARITY
+FROM loc_pct a
+JOIN loc_pct b ON a.PU_LOCATION_ID = b.PU_LOCATION_ID AND a.DATASET < b.DATASET
+GROUP BY a.DATASET, b.DATASET
+ORDER BY COSINE_SIMILARITY DESC;
+
+--------------------------------------------------------------------------------
+-- 15. SIMILARITY ANALYSIS: Day-of-week profile similarity
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_DOW_SIMILARITY AS
+WITH dow_pct AS (
+    SELECT
+        DATASET,
+        PICKUP_DOW,
+        TRIP_COUNT * 1.0 / SUM(TRIP_COUNT) OVER (PARTITION BY DATASET) AS PCT
+    FROM GOLD.T3_TRIPS_BY_DOW
+)
+SELECT
+    a.DATASET AS DATASET_A,
+    b.DATASET AS DATASET_B,
+    ROUND(
+        SUM(a.PCT * b.PCT) /
+        (SQRT(SUM(a.PCT * a.PCT)) * SQRT(SUM(b.PCT * b.PCT)))
+    , 6) AS COSINE_SIMILARITY
+FROM dow_pct a
+JOIN dow_pct b ON a.PICKUP_DOW = b.PICKUP_DOW AND a.DATASET < b.DATASET
+GROUP BY a.DATASET, b.DATASET
+ORDER BY COSINE_SIMILARITY DESC;
+
+--------------------------------------------------------------------------------
+-- 16. SIMILARITY ANALYSIS: Monthly volume correlation (Pearson)
+--     Only for overlapping months between dataset pairs
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_MONTHLY_CORRELATION AS
+WITH monthly AS (
+    SELECT DATASET, PICKUP_YEAR, PICKUP_MONTH, TRIP_COUNT
+    FROM GOLD.T3_TRIPS_BY_MONTH
+)
+SELECT
+    a.DATASET AS DATASET_A,
+    b.DATASET AS DATASET_B,
+    COUNT(*) AS OVERLAPPING_MONTHS,
+    ROUND(CORR(a.TRIP_COUNT, b.TRIP_COUNT), 6) AS PEARSON_CORRELATION
+FROM monthly a
+JOIN monthly b
+    ON a.PICKUP_YEAR = b.PICKUP_YEAR
+    AND a.PICKUP_MONTH = b.PICKUP_MONTH
+    AND a.DATASET < b.DATASET
+GROUP BY a.DATASET, b.DATASET
+ORDER BY PEARSON_CORRELATION DESC;
+
+--------------------------------------------------------------------------------
+-- 17. SPATIAL ANALYSIS: Top pickup-dropoff pairs (OD pairs) per dataset
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_TOP_OD_PAIRS AS
+WITH yellow AS (
+    SELECT PU_LOCATION_ID, DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL AND DO_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID, DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+green AS (
+    SELECT PU_LOCATION_ID, DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL AND DO_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID, DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+fhv AS (
+    SELECT PU_LOCATION_ID, DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhv' AS DATASET
+    FROM SILVER.FHV_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL AND DO_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID, DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+),
+fhvhv AS (
+    SELECT PU_LOCATION_ID, DO_LOCATION_ID, COUNT(*) AS TRIP_COUNT, 'fhvhv' AS DATASET
+    FROM SILVER.FHVHV_TRIPS_CLEAN
+    WHERE PU_LOCATION_ID IS NOT NULL AND DO_LOCATION_ID IS NOT NULL
+    GROUP BY PU_LOCATION_ID, DO_LOCATION_ID
+    QUALIFY ROW_NUMBER() OVER (ORDER BY TRIP_COUNT DESC) <= 20
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+UNION ALL SELECT * FROM fhv
+UNION ALL SELECT * FROM fhvhv
+ORDER BY DATASET, TRIP_COUNT DESC;
+
+--------------------------------------------------------------------------------
+-- 18. TEMPORAL: COVID impact analysis (2019 vs 2020 monthly comparison)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_COVID_IMPACT AS
+WITH pre AS (
+    SELECT DATASET, PICKUP_MONTH, TRIP_COUNT AS TRIPS_2019
+    FROM GOLD.T3_TRIPS_BY_MONTH
+    WHERE PICKUP_YEAR = 2019
+),
+post AS (
+    SELECT DATASET, PICKUP_MONTH, TRIP_COUNT AS TRIPS_2020
+    FROM GOLD.T3_TRIPS_BY_MONTH
+    WHERE PICKUP_YEAR = 2020
+)
+SELECT
+    COALESCE(pre.DATASET, post.DATASET) AS DATASET,
+    COALESCE(pre.PICKUP_MONTH, post.PICKUP_MONTH) AS PICKUP_MONTH,
+    pre.TRIPS_2019,
+    post.TRIPS_2020,
+    ROUND((post.TRIPS_2020 - pre.TRIPS_2019) * 100.0 / NULLIF(pre.TRIPS_2019, 0), 2) AS PCT_CHANGE
+FROM pre
+FULL OUTER JOIN post ON pre.DATASET = post.DATASET AND pre.PICKUP_MONTH = post.PICKUP_MONTH
+ORDER BY DATASET, PICKUP_MONTH;
+
+--------------------------------------------------------------------------------
+-- 19. TRIP CHARACTERISTICS: Fare breakdown for yellow and green (payment type dist)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_PAYMENT_TYPE_DIST AS
+WITH yellow AS (
+    SELECT
+        PAYMENT_TYPE,
+        COUNT(*) AS TRIP_COUNT,
+        'yellow' AS DATASET
+    FROM SILVER.YELLOW_TRIPS_CLEAN
+    WHERE PAYMENT_TYPE IS NOT NULL
+    GROUP BY PAYMENT_TYPE
+),
+green AS (
+    SELECT
+        PAYMENT_TYPE,
+        COUNT(*) AS TRIP_COUNT,
+        'green' AS DATASET
+    FROM SILVER.GREEN_TRIPS_CLEAN
+    WHERE PAYMENT_TYPE IS NOT NULL
+    GROUP BY PAYMENT_TYPE
+)
+SELECT * FROM yellow
+UNION ALL SELECT * FROM green
+ORDER BY DATASET, PAYMENT_TYPE;
+
+--------------------------------------------------------------------------------
+-- 20. SIMILARITY ANALYSIS: Shared ride analysis for FHVHV
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_FHVHV_SHARED_RIDES AS
+SELECT
+    PICKUP_YEAR,
+    COUNT(*) AS TOTAL_TRIPS,
+    SUM(CASE WHEN SHARED_REQUEST_FLAG = 'Y' THEN 1 ELSE 0 END) AS SHARED_REQUESTED,
+    SUM(CASE WHEN SHARED_MATCH_FLAG = 'Y' THEN 1 ELSE 0 END) AS SHARED_MATCHED,
+    ROUND(SUM(CASE WHEN SHARED_REQUEST_FLAG = 'Y' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS PCT_SHARED_REQUESTED,
+    ROUND(SUM(CASE WHEN SHARED_MATCH_FLAG = 'Y' THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) AS PCT_SHARED_MATCHED,
+    ROUND(SUM(CASE WHEN SHARED_MATCH_FLAG = 'Y' THEN 1 ELSE 0 END) * 100.0 /
+        NULLIF(SUM(CASE WHEN SHARED_REQUEST_FLAG = 'Y' THEN 1 ELSE 0 END), 0), 2) AS MATCH_RATE
+FROM SILVER.FHVHV_TRIPS_CLEAN
+GROUP BY PICKUP_YEAR
+ORDER BY PICKUP_YEAR;
+
+--------------------------------------------------------------------------------
+-- 21. FHVHV: Uber vs Lyft comparison
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_FHVHV_UBER_VS_LYFT AS
+SELECT
+    PICKUP_YEAR,
+    HVFHS_LICENSE_NUM,
+    CASE
+        WHEN HVFHS_LICENSE_NUM = 'HV0003' THEN 'Uber'
+        WHEN HVFHS_LICENSE_NUM = 'HV0005' THEN 'Lyft'
+        ELSE 'Other'
+    END AS COMPANY,
+    COUNT(*) AS TRIP_COUNT,
+    AVG(TRIP_MILES) AS AVG_MILES,
+    AVG(TRIP_TIME / 60.0) AS AVG_DURATION_MIN,
+    AVG(BASE_PASSENGER_FARE) AS AVG_FARE,
+    AVG(TIPS) AS AVG_TIP,
+    AVG(DRIVER_PAY) AS AVG_DRIVER_PAY
+FROM SILVER.FHVHV_TRIPS_CLEAN
+GROUP BY PICKUP_YEAR, HVFHS_LICENSE_NUM
+ORDER BY PICKUP_YEAR, COMPANY;
+
+--------------------------------------------------------------------------------
+-- 22. SUMMARY: Overall dataset sizes and date ranges
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE TABLE GOLD.T3_DATASET_SUMMARY AS
+SELECT 'yellow' AS DATASET, COUNT(*) AS TOTAL_TRIPS,
+    MIN(PICKUP_DATETIME) AS MIN_PICKUP, MAX(PICKUP_DATETIME) AS MAX_PICKUP,
+    MIN(PICKUP_YEAR) AS MIN_YEAR, MAX(PICKUP_YEAR) AS MAX_YEAR
+FROM SILVER.YELLOW_TRIPS_CLEAN
+UNION ALL
+SELECT 'green', COUNT(*), MIN(PICKUP_DATETIME), MAX(PICKUP_DATETIME),
+    MIN(PICKUP_YEAR), MAX(PICKUP_YEAR)
+FROM SILVER.GREEN_TRIPS_CLEAN
+UNION ALL
+SELECT 'fhv', COUNT(*), MIN(PICKUP_DATETIME), MAX(PICKUP_DATETIME),
+    MIN(PICKUP_YEAR), MAX(PICKUP_YEAR)
+FROM SILVER.FHV_TRIPS_CLEAN
+UNION ALL
+SELECT 'fhvhv', COUNT(*), MIN(PICKUP_DATETIME), MAX(PICKUP_DATETIME),
+    MIN(PICKUP_YEAR), MAX(PICKUP_YEAR)
+FROM SILVER.FHVHV_TRIPS_CLEAN;
