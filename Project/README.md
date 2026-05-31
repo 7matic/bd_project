@@ -506,6 +506,155 @@ create or replace TABLE BIGDATA_TAXI_MZMB.SILVER.FHVHV_TRIPS cluster by (pickup_
 
 ### T6. MATIC
 
+- In this task we performed stream processing on Yellow Taxi and FHVHV data.
+- The main idea was to treat historical trip records as a stream, by replaying them in pickup timestamp order through Kafka.
+
+#### Streaming architecture
+
+- The full streaming pipeline is:
+
+```text
+Snowflake clean source table
+→ Python producer
+→ Kafka topics
+→ Snowflake Kafka Connector / Snowpipe Streaming
+→ Snowflake landing table
+→ parsed stream view
+→ rolling statistics in Snowflake
+```
+
+- We also implemented a custom Python consumer for stream clustering:
+
+```text
+Kafka topics
+→ Python consumer
+→ BIRCH stream clustering
+→ CSV outputs
+→ Snowflake GOLD tables
+```
+
+- The Docker/Kafka setup is in `scripts/t6/docker-compose.yaml`.
+- It contains two Kafka brokers, and Kafka Connect.
+- Kafka Connect was used to run the Snowflake Kafka Connector.
+- We used two Kafka topics:
+  - `t6-yellow-2021`
+  - `t6-fhvhv-2021`
+- Using two topics helped us keep the original data sources logically separated during streaming. This makes it easier to replay, debug and monitor Yellow and FHVHV messages independently.
+- Both topics were still mapped into the same Snowflake landing table, so the data was combined for analysis.
+
+#### Snowflake source and landing tables
+
+- First, we created `GOLD.T6_STREAM_SOURCE_2021`, which combines Yellow Taxi and FHVHV trips into one common schema.
+- This table was created from:
+  - `SILVER.YELLOW_TRIPS_CLEAN`
+  - `SILVER.FHVHV_TRIPS_CLEAN`
+  - `EXTERNAL_DATA.TAXI_ZONES`
+- We added a `dataset` column, so every row still keeps information about whether it came from Yellow or FHVHV.
+- We also added `stream_id`, which is based on pickup timestamp ordering. This allows us to recover the intended stream order even though we used two Kafka topics.
+- The Python producer in `scripts/t6/producer_t6_2021.py` reads ordered rows from Snowflake and sends each row as a JSON message to Kafka.
+- Yellow rows are sent to `t6-yellow-2021`, and FHVHV rows are sent to `t6-fhvhv-2021`.
+- The Snowflake Kafka Connector then ingests both Kafka topics into:
+
+```sql
+GOLD.T6_KAFKA_LANDING_2021
+```
+
+- This table contains:
+  - `RECORD_CONTENT` — the actual JSON trip message,
+  - `RECORD_METADATA` — Kafka metadata such as topic, partition and offset.
+- We then created `GOLD.T6_STREAM_EVENTS_2021`, which parses the JSON into normal typed columns.
+
+![alt text](images/t6/tables.png)
+
+#### Rolling descriptive statistics
+
+- For rolling statistics, we first aggregated the stream into hourly buckets.
+- Then we computed a rolling 24-hour window using the current hour and previous 23 hourly buckets.
+- This was chosen because taxi demand has strong daily patterns, so a 24-hour rolling window gives smoother and more meaningful statistics than looking at only one hour.
+- For each group we calculated:
+  - rolling trip count,
+  - rolling mean trip distance,
+  - rolling standard deviation of trip distance,
+  - rolling mean trip duration,
+  - rolling standard deviation of trip duration,
+  - rolling mean fare amount,
+  - rolling standard deviation of fare amount.
+- These statistics were calculated for three attributes:
+  - `trip_distance`,
+  - `trip_duration_sec`,
+  - `fare_amount`.
+
+##### Borough rolling statistics
+
+- For boroughs, we created:
+  - `GOLD.T6_HOURLY_BOROUGH_STATS_2021`
+  - `GOLD.T6_ROLLING_BOROUGH_STATS_2021`
+- The rolling statistics are grouped by borough and dataset.
+- We kept the `dataset` column because it lets us compare Yellow Taxi and FHVHV behavior separately, while still using one combined stream.
+
+![alt text](images/t6/rolling_borough_stats.png)
+
+##### Top 10 location rolling statistics
+
+- We also selected the top 10 most interesting locations based on the highest number of pickups and dropoffs in the streamed sample.
+- Special zones such as `Outside of NYC`, `N/A` and `Unknown` were excluded from the top location analysis, because they are not real taxi zones.
+- For this part we created:
+  - `GOLD.T6_TOP_LOCATIONS_2021`
+  - `GOLD.T6_TOP_LOCATION_EVENTS_2021`
+  - `GOLD.T6_HOURLY_TOP_LOCATION_STATS_2021`
+  - `GOLD.T6_ROLLING_TOP_LOCATION_STATS_2021`
+- We kept `location_role`, which tells us whether the location was used as a pickup or dropoff location.
+- This makes the results more informative, because some zones are more important for pickups and others for dropoffs.
+
+![alt text](images/t6/rolling_top_locations_stats.png)
+
+#### Stream clustering with BIRCH
+
+- For stream clustering, we implemented a custom Python Kafka consumer in:
+
+```text
+scripts/t6/consumer_t6_birch_2021.py
+```
+
+- The consumer subscribes to both Kafka topics and processes messages in micro-batches.
+- We used the BIRCH clustering algorithm, because it supports incremental fitting with `partial_fit`.
+- This is useful for streaming, because the model does not need to store the full stream in memory.
+- BIRCH builds a compact clustering-feature tree while the stream is being consumed.
+- Each Kafka message was transformed into numeric features:
+  - dataset flag,
+  - hour of day,
+  - day of week,
+  - pickup location,
+  - dropoff location,
+  - trip distance,
+  - trip duration,
+  - fare amount.
+- Hour and day of week were encoded cyclically, because for example hour 23 and hour 0 are close in time.
+- Distance, duration and fare were log-scaled, so extreme values do not dominate the clustering too much.
+- During the stream, BIRCH was trained with `n_clusters=None`, so it could build its internal subclusters.
+- At the end we set `n_clusters = 6`, so the internal subclusters were summarized into 6 final clusters.
+- The number 6 was chosen because it is small enough to interpret, but still large enough to separate different trip patterns.
+
+- The clustering outputs were saved as CSV files:
+  - `t6_birch_cluster_summary_2021.csv`
+  - `t6_birch_assignments_sample_2021.csv`
+  - `t6_birch_progress_2021.csv`
+- We also uploaded the most important results back to Snowflake:
+  - `GOLD.T6_BIRCH_CLUSTER_SUMMARY_2021`
+  - `GOLD.T6_BIRCH_ASSIGNMENTS_SAMPLE_2021`
+  - `GOLD.T6_BIRCH_PROGRESS_2021`
+
+![alt text](images/t6/birch_clustering_summary.png)
+
+#### Clustering interpretation
+
+- The final BIRCH result produced 6 clusters.
+- Some clusters were almost completely Yellow Taxi trips, especially Manhattan-heavy and airport-related trips.
+- Other clusters were mostly FHVHV trips and were more spread across Brooklyn, Manhattan, Bronx and Queens.
+- One very small cluster captured rare long FHVHV trips with much higher average distance, duration and fare.
+- This suggests that Yellow Taxi and FHVHV trips overlap, but they still show different usage patterns.
+- Yellow Taxi trips are more Manhattan/JFK-oriented, while FHVHV trips are more broadly distributed across boroughs.
+
 ### T7. MATIC
 
 ### T8. MATIJA
