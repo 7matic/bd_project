@@ -510,6 +510,53 @@ create or replace TABLE BIGDATA_TAXI_MZMB.SILVER.FHVHV_TRIPS cluster by (pickup_
 
 ### T8. MATIJA
 
+- This task analyses how the emergence of FHVHV operators (Uber, Lyft, and smaller competitors) affected Yellow and Green taxi volumes, both in absolute trips and relative market share.
+- All operators are tracked: Yellow taxi, Green taxi, Uber (`HV0003`), Lyft (`HV0005`), and the residual FHV "other" category (which includes smaller operators such as Juno and Via, and historically all FHV before the Feb 2019 FHVHV regulation took effect).
+- Images are in `images/t8/`. No separate SQL script — analysis builds directly on the GOLD tables and SILVER views from previous tasks.
+
+#### Note on FHV vs FHVHV and the Feb 2019 regulation
+
+- Before February 2019, Uber and Lyft reported trips under the `FHV` dataset (as dispatching bases). When the FHVHV regulation came into effect, high-volume operators were required to report under the new `FHVHV` dataset, causing a sharp collapse in `FHV` counts and a simultaneous spike in `FHVHV`. This structural break is visible across all charts and must be accounted for when comparing pre- and post-2019 figures.
+- Smaller operators (Juno `HV0002`, Via `HV0004`) appear briefly in the FHVHV data around 2019 before largely disappearing — Juno shut down in 2019, Via pivoted away from consumer rides.
+
+#### Absolute trip volumes and market share
+
+- Yellow taxi peaked at ~170M trips/year in 2012–2013 and has fallen steadily ever since, driven first by FHV competition (pre-2019) and then by Uber/Lyft. By 2023–2024 it handles ~40M trips/year — about 14% of its 2012 volume in absolute terms.
+- Green taxi never exceeded ~20M trips/year and is now near zero, having lost its outer-borough niche to rideshare.
+- FHV "other" peaked at ~260M trips/year in 2018 (capturing nearly all rideshare at the time), then collapsed after the FHVHV regulation as operators switched reporting categories.
+- Post-2019, Uber holds ~175M trips/year (~57–60% market share), Lyft ~60M/year (~20–22%), Yellow ~14%, Green <1%, FHV other ~5–7%.
+
+![alt text](images/t8/anual_volumne_market.png)
+
+#### Monthly market share over time
+
+- Yellow was effectively 100% of tracked trips in 2012 (only Yellow data exists). Its share declined steadily as FHV grew from 2014 onwards, crossing below 50% around 2016 and below 22% by early 2019.
+- After the FHVHV regulation cutover in Feb 2019, Uber immediately emerged at ~50% share and has since stabilised at ~55–60%. Lyft holds a steady ~20–22%.
+- Via and Juno are visible as thin lines just before February 2019 (~1–2% share each) and then disappear entirely.
+- Green taxi's share has been in continuous decline since 2014 and is now effectively 0%.
+
+![alt text](images/t8/monthly_market_share.png)
+
+![alt text](images/t8/staked_market.png)
+
+#### Annual growth rates
+
+- Yellow declined ~10% per year consistently from 2013 to 2019, with a steep −72% crash in 2020 (COVID), then a +23% post-COVID rebound in 2021–2022, before returning to mild decline.
+- Green declined faster than Yellow throughout — typically −15 to −30% per year — and its COVID crash was proportionally worse (~−75%).
+- Uber and Lyft (post-2019 only) show a similar COVID crash in 2020 (~−40%) and a strong 2021 rebound (~+20–25%), then gradual stabilisation.
+- The 2026 column shows extreme negative rates across all operators because only partial-year data is available.
+
+![alt text](images/t8/anual_growth_rate.png)
+
+#### Before vs after FHVHV: impact on traditional services
+
+- Comparing average monthly trips pre-FHVHV (2015–2018) vs post-FHVHV (2021–2024):
+  - Yellow taxi: from ~10.5M to ~3M avg monthly trips — **−70%**
+  - Green taxi: from ~1M to near 0 — **−95%**
+  - FHV other: from ~13.5M to ~1.5M — **−88%** (most operators migrated to FHVHV)
+
+![alt text](images/t8/before_After.png)
+
 ### T9. MATIJA
 
 ### T10. MATIC
