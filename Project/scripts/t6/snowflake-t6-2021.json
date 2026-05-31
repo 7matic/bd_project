@@ -1,0 +1,24 @@
+{
+  "connector.class": "com.snowflake.kafka.connector.SnowflakeStreamingSinkConnector",
+  "tasks.max": "1",
+
+  "topics": "t6-yellow-2021,t6-fhvhv-2021",
+  "snowflake.topic2table.map": "t6-yellow-2021:T6_KAFKA_LANDING_2021,t6-fhvhv-2021:T6_KAFKA_LANDING_2021",
+
+  "snowflake.url.name": "FHB32629.snowflakecomputing.com",
+  "snowflake.user.name": "<SNOWFLAKE_USER>",
+  "snowflake.private.key": "<PRIVATE_KEY_NOT_COMMITTED>",
+  "snowflake.database.name": "BIGDATA_TAXI_MZMB",
+  "snowflake.schema.name": "GOLD",
+  "snowflake.role.name": "TRAINING_ROLE",
+
+  "snowflake.streaming.validate.compatibility.with.classic": "false",
+  "snowflake.enable.schematization": "false",
+
+  "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter.schemas.enable": "false",
+
+  "buffer.count.records": "1000",
+  "buffer.flush.time": "10"
+}
