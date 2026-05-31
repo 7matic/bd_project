@@ -459,52 +459,50 @@ create or replace TABLE BIGDATA_TAXI_MZMB.SILVER.FHVHV_TRIPS cluster by (pickup_
 
 ### T5. MATIJA
 
-For augmentation, the cleaned trip views from T2 should be used as the base data:
+- Each of the four cleaned trip tables (`YELLOW`, `GREEN`, `FHV`, `FHVHV`) was enriched with external data: weather, schools, attractions, and events.
+- All external data lives in a dedicated `EXTERNAL_DATA` schema. Scripts are split across three files: `scripts/t5/t5_fetch_data.sql` (data fetching), `scripts/t5/t5.sql` (spatial joins and event expansion), and `scripts/t5/t5_gold.sql` (final enriched GOLD tables).
+- Two taxi zone reference tables were set up in `EXTERNAL_DATA`:
+  - `TAXI_ZONE_LOOKUP` — the standard TLC taxi zone lookup CSV (downloaded directly from the TLC website), uploaded to Snowflake as-is. Provides `LOCATION_ID`, `BOROUGH`, `ZONE`, and `SERVICE_ZONE`.
+  - `TAXI_ZONES_GEOM` — geometry table for spatial joins. The TLC taxi zone shapefile was downloaded and converted locally using `scripts/t5/convert_taxi.ipynb`: the shapefile is reprojected to EPSG:4326, each polygon's geometry is serialized to WKT, and the result is exported as `taxi_zones_wkt.csv` (columns: `location_id`, `borough`, `zone`, `wkt`). This CSV was then uploaded to Snowflake and the `wkt` column parsed into a `GEOM` column using `TO_GEOGRAPHY`.
 
-- `SILVER.YELLOW_TRIPS_CLEAN`
-- `SILVER.GREEN_TRIPS_CLEAN`
-- `SILVER.FHV_TRIPS_CLEAN`
-- `SILVER.FHVHV_TRIPS_CLEAN`
+#### External data sources
 
-External datasets should first be uploaded to Snowflake, into `BRONZE` stages. For example:
+| Table | Source | Content | Link key |
+|-------|--------|---------|----------|
+| `T5_WEATHER` | Open-Meteo archive API | Daily max/min temp (°C), precipitation (mm) for NYC, 2012–2025 | `DATE` → trip pickup date |
+| `T5_SCHOOLS_RAW` → `T5_SCHOOLS_BY_ZONE` | NYC Open Data (`n3p6-zve2`) | Primary and high schools with lat/lon, spatially joined to taxi zones | `PU_LOCATION_ID` |
+| `T5_ATTRACTIONS_RAW` → `T5_ATTRACTIONS_BY_ZONE` | NYC Open Data (`fn6f-htvy`) | Museums and cultural institutions, spatially joined to taxi zones | `PU_LOCATION_ID` |
+| `T5_EVENTS` → `T5_EVENTS_HOURLY` | NYC Open Data (`bkfu-528j`) | Permitted public events 2020–2024 by borough and datetime | `HOUR(PICKUP_DATETIME)` + `BOROUGH` |
 
-- taxi zone lookup / taxi zone geometry
-- weather data
-- schools
-- businesses
-- events
-- attractions or other city datasets
+#### Data fetching
 
-Idea:
+- All four external datasets were fetched using Python stored procedures defined directly in Snowflake (`EXTERNAL_DATA.FETCH_WEATHER`, `FETCH_EVENTS`, `FETCH_SCHOOLS`, `FETCH_ATTRACTIONS`), using the `ALLOW_ALL_EAI` external access integration.
+- Weather was pulled in 3-year chunks to avoid API limits.
+- Events were pulled quarter by quarter (2020–2024) to stay within the 10,000-row API limit per request.
 
-1. Upload external files to Snowflake stages.
-2. Create external/helper tables, for example:
-   - `T5_TAXI_ZONES`
-   - `T5_WEATHER`
-   - `T5_SCHOOLS`
-   - `T5_BUSINESSES`
-   - `T5_EVENTS`
-3. Join these helper tables with the cleaned trip views (so in the end you have only augmented aggregations instead of having full tables, as that would be really slow and redundant).
-4. Save the final enriched outputs into the `GOLD` schema.
+#### Spatial joins and event expansion
 
-Example:
+- Schools and attractions were joined to taxi zones using `ST_CONTAINS(zone_geom, ST_POINT(lon, lat))`, producing a count per zone:
+  - `T5_SCHOOLS_BY_ZONE`: school count per taxi zone
+  - `T5_ATTRACTIONS_BY_ZONE`: attraction count per taxi zone
+- Events were expanded hour-by-hour across their duration (defaulting to 3 hours when no end time is present), then aggregated to an active event count per hour and borough (`T5_EVENTS_HOURLY`).
 
-```
-T5_TAXI_ZONES
-  location_id, borough, zone, service_zone, maybe geometry
+#### Final GOLD tables
 
-T5_WEATHER
-  datetime/hour, temperature, precipitation, snow, wind, etc.
+- `t5_gold.sql` joins all external data onto the four cleaned trip views and materializes four enriched tables in `GOLD`:
+  - `GOLD.T5_YELLOW`, `GOLD.T5_GREEN`, `GOLD.T5_FHV`, `GOLD.T5_FHVHV`
+- Each table contains all original trip columns plus:
 
-T5_SCHOOLS_BY_ZONE
-  location_id or borough, school_count
+| Column | Description |
+|--------|-------------|
+| `BOROUGH`, `ZONE`, `SERVICE_ZONE` | From `TAXI_ZONE_LOOKUP` by pickup location |
+| `TEMP_MAX_C`, `TEMP_MIN_C` | Daily temperature at pickup date |
+| `PRECIPITATION_MM` | Daily precipitation at pickup date |
+| `SCHOOL_COUNT` | Number of schools in the pickup zone |
+| `ATTRACTION_COUNT` | Number of attractions in the pickup zone |
+| `ACTIVE_EVENTS` | Number of permitted events active during the pickup hour in the pickup borough |
 
-T5_BUSINESSES_BY_ZONE
-  location_id or borough, business_count
-
-T5_EVENTS_BY_DATE_OR_ZONE
-  date/hour, zone/borough, event_count
-```
+- The gold tables were created on a `LARGE` warehouse due to the size of the joins, then scaled back to `XSMALL` afterwards.
 
 ### T6. MATIC
 
