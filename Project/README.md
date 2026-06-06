@@ -455,7 +455,36 @@ create or replace TABLE BIGDATA_TAXI_MZMB.SILVER.FHVHV_TRIPS cluster by (pickup_
 
 
 
-### T4. MATIC
+### T4. MATIJA
+
+- Storage format benchmark on the Green taxi 2024 partition (`SILVER.GREEN_TRIPS_CLEAN WHERE PICKUP_YEAR = 2024`, 617,885 rows).
+- Snowflake does not support HDF5 or DuckDB natively, so the comparison is split: Parquet, CSV, and CSV (gzip) were benchmarked in both Snowflake (`t4.sql`) and Python (`t4_benchmark.ipynb`), while HDF5 was Python-only.
+- **Measurement methodology:**
+  - *Python*: write time is a single run; read time is the median of 3 full `pd.read_*` calls loading the entire file into a DataFrame.
+  - *Snowflake*: write time is the `COPY INTO @stage` duration; read time is a `COUNT(*) FROM @stage/<format>/` query, pulled from `INFORMATION_SCHEMA.QUERY_HISTORY`. `COUNT(*)` forces a full file scan (every byte must be decompressed and parsed to count rows) without sending data back to the client, making it a clean format-vs-format comparison. `SELECT *` was not used for staged CSV files because CSV has no embedded schema — the engine cannot infer column names from the file alone, requiring positional `$1,$2,...` references. Parquet embeds its schema so `SELECT *` would work there, but `COUNT(*)` keeps the benchmark consistent across formats.
+  - Results are saved to `GOLD.T4_FORMAT_COMPARISON`.
+
+#### Results
+
+| Format | File size (MB) | Read time (s) | Write time (s) |
+|--------|---------------|--------------|----------------|
+| Parquet (snappy) [Python] | 15.07 | **0.11** | 0.82 |
+| CSV [Python] | 90.45 | 1.21 | 6.84 |
+| CSV (gzip) [Python] | **13.18** | 1.40 | 18.48 |
+| HDF5 (h5py/gzip) [Python] | 38.92 | 0.30 | 0.95 |
+| Parquet (snappy) [Snowflake] | 14.45 | 0.42 | 2.12 |
+| CSV [Snowflake] | 94.57 | 0.52 | 2.86 |
+| CSV (gzip) [Snowflake] | 13.99 | 0.60 | 3.23 |
+
+![alt text](images/t4/grapf_comparison.png)
+
+#### Key findings
+
+- **Parquet (snappy)** is the best all-round format: near-smallest size (~15 MB), fastest read in Python (0.11s, ~11× faster than CSV), and fast write (0.82s). It is the clear winner for analytical workloads.
+- **CSV (gzip)** achieves the smallest file size (~13–14 MB) but at the cost of the slowest write in Python (18.5s — gzip compression is expensive) and slower reads than Parquet due to decompression. Good for archival, poor for repeated reads.
+- **Plain CSV** is the largest format (~90–95 MB, 6× bigger than Parquet) with no speed advantage — strictly dominated by the alternatives.
+- **HDF5** offers a reasonable middle ground (38.9 MB, 0.30s read) but is Python-only and unavailable in Snowflake, limiting its usefulness in this pipeline.
+- **Snowflake vs Python**: Snowflake read times (0.42–0.60s) are slower than Python reads for the same formats, reflecting network and query planning overhead. However, Snowflake write times are tighter across formats (2.1–3.2s range) since the bottleneck shifts to cluster I/O rather than local compression.
 
 ### T5. MATIJA
 
