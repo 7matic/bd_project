@@ -737,4 +737,31 @@ scripts/t6/consumer_t6_birch_2021.py
 
 ### T9. MATIJA
 
+- Map visualizations of T2 and T4 results, rendered as choropleth maps over NYC taxi zone polygons.
+- Zone geometries come from `EXTERNAL_DATA.TAXI_ZONES_GEOM` (the WKT table built in T5), exported as GeoJSON via `ST_ASGEOJSON` and parsed in Python. Maps are drawn with matplotlib polygon patches — no external map tile service needed. Scripts: `scripts/t9/t9.sql` (aggregation) and `scripts/t9/t9_map.ipynb` (rendering).
+
+#### T2 on a map: data quality issues per zone
+
+- A direct `SELECT *` from `SILVER.GREEN_TRIPS` would map the T4 format benchmark result, but a geographic breakdown doesn't make sense for that task (format performance is machine-dependent, not location-dependent). For T4 we instead show trip volume per zone (from T3), which is geographically meaningful and visually informative.
+- For T2, the quality checks from T2 are re-applied per pickup zone against the raw (uncleaned) SILVER tables — `SILVER.YELLOW_TRIPS`, `SILVER.GREEN_TRIPS`, `SILVER.FHV_TRIPS`, `SILVER.FHVHV_TRIPS` — so the map reflects raw data quality before any filtering. Four issue types are counted per zone: zero trip distance (or trip miles for FHVHV), pickup equals dropoff, dropoff before pickup, and negative fare. These are summed into a single `TOTAL_ISSUE_PCT` column for the map color scale, normalized to the 95th percentile to avoid outliers dominating the palette. Zones with no data are shown in grey.
+- The SQL for this is in `t9.sql`, which creates `GOLD.T9_QUALITY_BY_ZONE`. FHV lacks distance and fare columns, so those issue counts are hardcoded to 0 for that dataset.
+
+![alt text](images/t9/issues_map.png)
+
+- **Yellow**: issue hotspots are concentrated in a few Manhattan zones and around the airports. Most of the city is clean.
+- **Green**: scattered high-issue zones in the outer boroughs, consistent with the T2 findings about certain location IDs having outsized problem rates.
+- **FHV**: large portions of the city show elevated issue rates (orange/red), especially outer boroughs — reflecting the systematic dropoff timestamp problems and missing location data identified in T2.
+- **FHVHV**: mostly light/yellow across the entire city, confirming that the FHVHV dataset is by far the cleanest of the four.
+
+#### T4 on a map: trip volume per zone
+
+- Geographic mapping of the T4 format benchmark result doesn't make sense — format read/write speed is a property of the machine and file, not a location. Instead, we map total trip volume per pickup zone (aggregated across all years from `GOLD.T3_PICKUP_LOCATION_DIST`), which gives a geographically meaningful view of where trips originate. The color scale uses a log transform to handle the large dynamic range between Manhattan and outer-borough zones.
+
+![alt text](images/t9/volumne_map.png)
+
+- **Yellow**: dominated by Manhattan and JFK/LGA airports. Outer boroughs are nearly empty, consistent with yellow taxi's limited reach outside Manhattan.
+- **Green**: inverse of Yellow — concentrated in the Bronx, northern Manhattan, and parts of Brooklyn and Queens, exactly the outer-borough service zone Green taxi was designed for.
+- **FHV**: broader geographic spread than Yellow or Green, with elevated volume across all five boroughs, though density is lower than FHVHV.
+- **FHVHV**: the most geographically uniform coverage, with high volume across virtually every zone including outer boroughs, airports, and Manhattan.
+
 ### T10. MATIC
