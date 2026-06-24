@@ -1,17 +1,5 @@
 # Big Data Project 2025/26 | Matic Zadobovšek, Matija Bažec
 
-## Getting started (internal instructions)
-
-- Most information regarding our dataset can be found on https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page website. Always refer to that.
-- First you should go through the `Tasks` section below, to see what we have done. You should follow similar structure regarding organization in the next steps as well.
-- Work between the two of us is distributed between the tasks, and each task has a team member name written in the title, so you can see who is supposed to do what.
-- Project instructions are available in the `instructions.pdf` file.
-- Check the `Project structure` section below to see how our project is organized, and how you should continue to save obtained results and code.
-- Whenever you complete a task, you should update the `README.md` file with what you did, add key results and images. This will help us with the final report, because we will already have most of the content prepared here.
-- On the HPC cluster our work can be found under `/d/hpc/projects/FRI/bigdata/students/mz1034/Project`, but majority of the work is done on Snowflake, and it should remain like that.
-- When you prepare visualizations avoid having every word capitalized (This Looks Extremely Ugly).
-- When working on Snowflake, you should work within your own workspace, because you can only share workspace with users with the same role, and that would mean everyone would have access to our workspace, which is not ideal. Just make sure to upload your final SQL and other code files to our repository, so we have everything in one place and we can easily run each other's code if needed.
-
 ## Project structure
 
 ```text
@@ -19,38 +7,30 @@ Project/
 ├── README.md
 ├── instructions.pdf
 │
-├── images/
+├── images/             # Images and charts used in README/report
 │   ├── t0/
-│   │   ├── warehouse.png
-│   │   ├── db.png
-│   │   ├── schemas.png
-│   │   ├── stages.png
-│   │   └── tables.png
-│   │
 │   ├── t1/
-│   │   ├── tables.png
-│   │   ├── preview_yellow.png
-│   │   ├── preview_green.png
-│   │   ├── preview_fhv.png
-│   │   └── preview_fhvhv.png
-│   │
-│   └── t2/
-│       ├── yellow_chart.png
-│       ├── green_chart.png
-│       ├── fhv_chart.png
-│       └── fhvhv_chart.png
+│   ├── t2/
+│   ├── t3/
+│   ├── t4/
+│   ├── t6/
+│   ├── t8/
+│   └── t9/
 │
-└── scripts/
-    ├── t0/
-    │   ├── missing_data.py
-    │   ├── snowflake.py
-    │   └── t0.sql
-    │
-    ├── t1/
-    │   └── t1.sql
-    │
-    └── t2/
-        └── t2.sql
+├── scripts/            # SQL, Python and notebook code by task
+│   ├── t0/
+│   ├── t1/
+│   ├── t2/
+│   ├── t3/
+│   ├── t4/
+│   ├── t5/
+│   ├── t6/
+│   ├── t7_t10/
+│   └── t9/
+│
+├── presentation/       # Presentation material
+│
+└── report/             # Final report material
 ```
 
 ## Tasks
@@ -684,7 +664,113 @@ scripts/t6/consumer_t6_birch_2021.py
 - This suggests that Yellow Taxi and FHVHV trips overlap, but they still show different usage patterns.
 - Yellow Taxi trips are more Manhattan/JFK-oriented, while FHVHV trips are more broadly distributed across boroughs.
 
-### T7. MATIC
+## T7. MATIC
+
+- Here we performed batch machine learning on the cleaned and augmented taxi/FHV data.
+- We decided to solve the **City-Wide Demand Forecasting** problem. The goal was to predict hourly ride demand across the whole city using all four datasets: `yellow`, `green`, `fhv` and `fhvhv`.
+
+- In `t7.sql` we first created a common hourly time range where all four datasets and the T5 weather data are available.
+- We then created hourly demand counts by:
+
+```text
+dataset + pickup_location_id + pickup_hour
+```
+
+- The target variable is `TRIP_COUNT`, and for training we used `LOG_TRIP_COUNT = LN(1 + TRIP_COUNT)`, because the demand distribution is very skewed.
+
+The data was split by time:
+
+| Split | Period |
+|---|---|
+| Train | before 2024-01-01 |
+| Validation | 2024 |
+| Test | 2025 |
+
+We tested two feature sets:
+
+| Feature set | Description |
+|---|---|
+| `baseline_without_augmentation` | Service type, location, time, lag and rolling demand features |
+| `augmented_with_t5` | Baseline features plus weather, schools, attractions and events |
+
+We used:
+
+| Requirement | Our model |
+|---|---|
+| Native distributed third-party algorithm | Distributed XGBoost |
+| scikit-learn `partial_fit` algorithm | `SGDRegressor.partial_fit` |
+| Additional distributed GPU experiment | PyTorch |
+
+We wanted to use Dask-ML, but we could not install and use it properly inside the Snowflake environment. Because of that, we used PyTorch as an additional distributed GPU experiment.
+
+#### XGBoost results
+
+XGBoost was our main model for T7 and T10.
+
+| Model | Workers | Features | Train rows | Test rows | Train time (s) | MAE | RMSE | R² |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| Global XGBoost GPU | 2 | Baseline | 45,147,840 | 9,180,480 | 146.80 | 9.47 | 29.92 | 0.852 |
+| Global XGBoost GPU | 4 | Baseline | 45,147,840 | 9,180,480 | 134.69 | 9.40 | 29.96 | 0.852 |
+| Global XGBoost GPU | 4 | Augmented | 45,147,840 | 9,180,480 | 137.83 | 9.44 | 30.77 | 0.844 |
+| Combined separate XGBoost GPU | 4 | Augmented | 45,147,840 | 9,180,480 | 511.86 | 6.37 | 21.84 | 0.921 |
+| Global XGBoost CPU | 4 | Augmented | 45,147,840 | 9,180,480 | 154.43 | 10.37 | 33.82 | 0.811 |
+
+The best XGBoost result was the aggregated separate model:
+
+```text
+RMSE = 21.84
+R²   = 0.921
+```
+
+This means that for XGBoost, training separate models for `yellow`, `green`, `fhv` and `fhvhv`, and then aggregating the results, worked better than training one global model.
+
+#### Single model vs aggregated models
+
+| Algorithm | Single global RMSE | Aggregated separate RMSE | Better approach |
+|---|---:|---:|---|
+| XGBoost | 29.96 | 21.84 | Aggregated separate models |
+| PyTorch | 27.17 | 69.82 | Single global model |
+
+
+#### Impact of T5 augmentation
+
+| Model | Baseline RMSE | Augmented RMSE | Result |
+|---|---:|---:|---|
+| XGBoost global GPU, 4 workers | 29.96 | 30.77 | Augmentation did not help |
+| PyTorch global GPU, 4 workers | 68.04 | 44.52 | Augmentation helped |
+| SGD partial_fit | 563.01 | 417.44 | Augmentation helped, but SGD was still weak |
+
+#### PyTorch results
+
+PyTorch was used as an additional distributed GPU approach, because Dask-ML could not be used in Snowflake.
+
+| Model | Workers | Features | Train rows processed | Test rows | Train time (s) | MAE | RMSE | R² |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| Global PyTorch DDP | 1 | Baseline | 451,461,120 | 9,175,040 | 201.07 | 14.31 | 109.94 | -0.996 |
+| Global PyTorch DDP | 2 | Baseline | 451,379,200 | 9,175,040 | 150.38 | 5.14 | 27.17 | 0.878 |
+| Global PyTorch DDP | 4 | Baseline | 451,215,360 | 9,175,040 | 116.61 | 5.98 | 68.04 | 0.235 |
+| Global PyTorch DDP | 4 | Augmented | 451,215,360 | 9,175,040 | 131.42 | 5.50 | 44.52 | 0.672 |
+| Combined separate PyTorch DDP | 2 | Baseline | 450,887,680 | 9,175,040 | 183.39 | 8.51 | 69.82 | 0.194 |
+
+The best PyTorch result was the 2-worker global model. It achieved:
+
+```text
+RMSE = 27.17
+R²   = 0.878
+```
+#### SGDRegressor partial_fit results
+
+We also used `SGDRegressor.partial_fit` as the scikit-learn algorithm. It processes the data in batches.
+
+| Model | Features | Train rows processed | Test rows | Train time (s) | MAE | RMSE | R² |
+|---|---|---:|---:|---:|---:|---:|---:|
+| SGD stable, 1 epoch | Baseline | 45,147,840 | 9,180,480 | 37.25 | 99.61 | 563.01 | -51.39 |
+| SGD stable, 10 epochs | Baseline | 451,478,400 | 9,180,480 | 384.60 | 131.74 | 671.94 | -73.62 |
+| SGD stable, 1 epoch | Augmented | 45,147,840 | 9,180,480 | 69.68 | 64.62 | 417.44 | -27.80 |
+
+SGD was much worse than XGBoost and PyTorch, which was expected because the problem is nonlinear.
+
+We did not test SGD scalability with Ray workers, because standard scikit-learn `SGDRegressor.partial_fit` is not natively distributed. It updates one model batch by batch, and Ray does not automatically synchronize one shared scikit-learn model across workers.
 
 ### T8. MATIJA
 
@@ -765,3 +851,56 @@ scripts/t6/consumer_t6_birch_2021.py
 - **FHVHV**: the most geographically uniform coverage, with high volume across virtually every zone including outer boroughs, airports, and Manhattan.
 
 ### T10. MATIC
+
+- In T10 we solved the T7 forecasting problem using distributed CPU and GPU processing.
+- We used Snowflake Container Runtime with Ray clusters for this.
+
+#### Ray cluster setup
+
+- We used Ray to scale the compute cluster to different numbers of workers.
+- The main tested setups were:
+
+```text
+1 worker
+2 workers
+4 workers
+```
+
+- Ray was used for:
+  - distributed XGBoost GPU training,
+  - distributed XGBoost CPU training,
+  - distributed PyTorch DDP GPU training.
+
+The data was read from Snowflake through Snowflake ML connectors, instead of loading the whole dataset into one local dataframe.
+
+#### CPU vs GPU comparison
+
+For the CPU/GPU comparison we trained the augmented global XGBoost model on 4 workers.
+
+| Model | Compute | Workers | Features | Train time (s) | MAE | RMSE | R² |
+|---|---|---:|---|---:|---:|---:|---:|
+| XGBoost | GPU | 4 | Augmented | 137.83 | 9.44 | 30.77 | 0.844 |
+| XGBoost | CPU | 4 | Augmented | 154.43 | 10.37 | 33.82 | 0.811 |
+
+The GPU version was faster and achieved better error metrics in this run.
+
+#### Scalability results
+
+For XGBoost GPU:
+
+| Workers | Train time (s) | RMSE | R² |
+|---:|---:|---:|---:|
+| 2 | 146.80 | 29.92 | 0.852 |
+| 4 | 134.69 | 29.96 | 0.852 |
+
+Increasing from 2 to 4 workers reduced training time, while accuracy stayed almost the same.
+
+For PyTorch DDP GPU:
+
+| Workers | Train time (s) | RMSE | R² |
+|---:|---:|---:|---:|
+| 1 | 201.07 | 109.94 | -0.996 |
+| 2 | 150.38 | 27.17 | 0.878 |
+| 4 | 116.61 | 68.04 | 0.235 |
+
+PyTorch showed the clearest scalability in terms of training time. More workers reduced runtime, but the best accuracy was achieved with 2 workers.
