@@ -1,0 +1,11 @@
+GitHub repository:
+https://github.com/7matic/bd_project/tree/main/Project
+
+Snowflake:
+https://sfedu02-fhb32629.snowflakecomputing.com
+
+Database:
+BIGDATA_TAXI_MZMB
+
+Warehouse:
+BIGDATA_MZMB_WH
