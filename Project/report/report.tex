@@ -58,13 +58,9 @@ and the database:
 \texttt{BIGDATA\_TAXI\_MZMB}
 \end{center}
 
-This is where all our main results are available, separated into the \texttt{BRONZE}, \texttt{SILVER}, \texttt{GOLD}, and \texttt{EXTERNAL\_DATA} schemas. The data pipeline follows a simple medallion structure: the \texttt{BRONZE} layer contains raw staged Parquet files and schema inspection outputs, the \texttt{SILVER} layer contains unified and cleaned trip tables, the \texttt{GOLD} layer contains aggregated results, enriched tables, and visualization inputs, and external datasets are stored in the \texttt{EXTERNAL\_DATA} schema.
+This is where all our main results are available, separated into the \texttt{BRONZE}, \texttt{SILVER}, \texttt{GOLD}, and \texttt{EXTERNAL\_DATA} schemas. The data pipeline follows a simple medallion structure: the \texttt{BRONZE} layer contains raw staged Parquet files and schema inspection outputs, the \texttt{SILVER} layer contains unified and cleaned trip tables, the \texttt{GOLD} layer contains aggregated results, enriched tables, and visualization inputs, and external datasets are stored in the \texttt{EXTERNAL\_DATA} schema. You can log in to Snowflake to see the results at \textbf{\path{https://sfedu02-fhb32629.snowflakecomputing.com}}, and then go to the mentioned database (Catalog $\to$ Database Explorer).
 
-The full project is also available on GitHub at:
-
-\begin{center}
-\path{https://github.com/7matic/bd_project/tree/main/Project}
-\end{center}
+The full project is also available on GitHub at: \textbf{\path{https://github.com/7matic/bd_project/tree/main/Project}}.
 
 The repository contains all scripts, notebooks, SQL files, figures, and other report materials used for the project. Code is organized by task under \path{scripts/}, while figures used in the README and report are stored under \path{images/}.
 
@@ -94,7 +90,14 @@ We quickly observed that some files are not perfectly consistent over time: some
 
 \subsection*{T1: Silver layer schema unification}
 
-In T1, we created the unified \texttt{SILVER} tables from the raw staged Parquet files. The main script is \path{scripts/t1/t1.sql}.
+In T1, we created the unified \texttt{SILVER} tables from the raw staged Parquet files. The main script is \path{scripts/t1/t1.sql}. Figure~\ref{fig:t1_preview} shows an example preview of the unified Snowflake Yellow taxi table after schema differences were resolved.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\columnwidth]{t1/preview_yellow.png}
+\caption{Preview of unified records in Snowflake for Yellow taxi after schema unification.}
+\label{fig:t1_preview}
+\end{figure}
 
 We implemented the repartitioning concept in Snowflake by clustering on pickup year and month, which achieves the same practical result as year-based repartitioning in a file-based workflow. We extracted these two columns from the pickup timestamp and used them in later tasks for filtering and aggregation as well. The main outputs are the four unified tables: \texttt{SILVER.YELLOW\_TRIPS}, \texttt{SILVER.GREEN\_TRIPS}, \texttt{SILVER.FHV\_TRIPS}, and \texttt{SILVER.FHVHV\_TRIPS}, as shown in Figure \ref{fig:silver}.
 
@@ -139,7 +142,7 @@ After creating the unified \texttt{SILVER} tables in T1, we inspected the data q
 \item \texttt{QUALITY\_CHART}: table used for plotting issue percentages.
 \end{itemize}
 
-The per-file table represents the map step, and the yearly table represents the reduce step. The charts were created directly from the \texttt{QUALITY\_CHART} tables in Snowflake, which is a useful feature that allows for quick visualizations. We used percentages in the visualizations instead of raw counts because the datasets vary greatly in size.
+The per-file table represents the map step, and the yearly table represents the reduce step. The charts were created directly from the \texttt{QUALITY\_CHART} tables in Snowflake, which is a useful feature that allows for quick visualizations directly on the platform. We used percentages in the visualizations instead of raw counts because the datasets vary greatly in size.
 
 The exact checks regarding data quality depended on the dataset, because not all datasets have the same columns. The main checks were:
 \begin{itemize}[noitemsep,topsep=2pt]
@@ -155,121 +158,88 @@ The exact checks regarding data quality depended on the dataset, because not all
 
 \subsection*{Yellow and Green taxi quality}
 
-Yellow and Green taxi had similar types of issues. Most pickup years were valid, but there were a few strange years. For Yellow and Green, the most important problems were zero-distance trips, pickup equal to dropoff, negative fares, and some non-positive passenger counts.
+Yellow and Green taxis had similar types of issues. Most pickup years were valid, but a few unusual years appeared. For both Yellow and Green, the main problems were zero-distance trips, pickups equal to dropoffs, negative fares, and some non-positive passenger counts. Table \ref{tab:t2_yellow_green} shows only some selected quality issues, as it would not be possible to display everything in a single table. Other results can be found in the \texttt{README} of our GitHub repository.
 
 \begin{table}[h]
 \centering
 \caption{Selected quality issue rates for Yellow and Green taxi.}
 \label{tab:t2_yellow_green}
-\small
-\begin{tabular}{llrrrr}
+\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}llrrrr}
 \toprule
-Dataset & Year & Rows (M) & Zero dist. (\%) & Neg. fare (\%) & Neg. total (\%) \\
+Data & Year & Rows (M) & Zero dist. & Neg. fare & Neg. total \\
 \midrule
-Yellow & 2012 & 171.4 & 0.56 & 0.00 & 0.00 \\
-Yellow & 2020 & 24.6  & 1.34 & 0.38 & 0.38 \\
-Yellow & 2025 & 48.7  & 2.88 & 5.85 & 2.00 \\
-Green  & 2014 & 15.8  & 1.52 & 0.07 & 0.07 \\
-Green  & 2020 & 1.7   & 3.72 & 0.26 & 0.25 \\
-Green  & 2025 & 0.6   & 4.13 & 0.29 & 0.30 \\
+Yellow & 2012 & 171.4 & 0.56\% & 0.00\% & 0.00\% \\
+Yellow & 2020 & 24.6  & 1.34\% & 0.38\% & 0.38\% \\
+Yellow & 2025 & 48.7  & 2.88\% & 5.85\% & 2.00\% \\
+Green  & 2014 & 15.8  & 1.52\% & 0.07\% & 0.07\% \\
+Green  & 2020 & 1.7   & 3.72\% & 0.26\% & 0.25\% \\
+Green  & 2025 & 0.6   & 4.13\% & 0.29\% & 0.30\% \\
 \bottomrule
-\end{tabular}
+\end{tabular*}
 \end{table}
 
-Figure~\ref{fig} shows that the main issue percentages for Yellow and Green remain relatively small overall, but some problems increase in later years. For example, Yellow taxi has a noticeable rise in negative fare rows in 2025.
+Figure~\ref{fig:t2yellowgreen} shows that the main issue percentages for Yellow and Green remain relatively small overall, but some problems increase in later years. The increase in zero-distance most likely reflects app-canceled trips, and negative fare could be due to the growing number of digital refund entries.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=1\columnwidth]{t2/yellow_chart.png}
-\includegraphics[width=1\columnwidth]{t2/green_chart.png}
+\includegraphics[width=1\columnwidth]{images/t2/yellow_chart.png}
+\includegraphics[width=1\columnwidth]{images/t2/green_chart.png}
 \caption{Quality issue rates by year for Yellow taxi (top) and Green taxi (bottom).}
-\label{fig}
+\label{fig:t2yellowgreen}
 \end{figure}
 
-Based on these results, we created stricter clean views for Yellow and Green:
+Based on these results, we created stricter clean views for Yellow and Green, which are \texttt{SILVER.YELLOW\_TRIPS\_CLEAN} and \\ \texttt{SILVER.GREEN\_TRIPS\_CLEAN}. These views keep only rows with valid pickup years, pickup timestamps within the expected file month, dropoff after pickup, positive trip distance, non-negative fare and total amount, and passenger count either null or positive.
 
-\begin{center}
-\texttt{SILVER.YELLOW_TRIPS_CLEAN}, \quad \texttt{SILVER.GREEN_TRIPS_CLEAN}
-\end{center}
+\subsection*{FHV and FHVHV quality}
 
-These views keep only rows with valid pickup years, pickup timestamps within the expected file month, dropoff after pickup, positive trip distance, non-negative fare and total amount, and passenger count either null or positive.
-
-\subsection*{Methodology}
-
-Quality checks were implemented in \path{scripts/t2/t2.sql} using a map-reduce pattern: the map step computed issue counts per \texttt{(SOURCE\_FILE, PICKUP\_YEAR)}; the reduce step aggregated by year. Checks applied (where columns existed):
-
-\begin{itemize}[noitemsep,topsep=2pt]
-  \item \textbf{Unexpected year}: outside expected range per dataset.
-  \item \textbf{Pickup outside source month}: $>$1 day outside the file's calendar month.
-  \item \textbf{Pickup equals dropoff}: identical timestamps.
-  \item \textbf{Dropoff before pickup}: reversed timestamps.
-  \item \textbf{Zero distance}: trip distance or miles equal to zero.
-  \item \textbf{Non-positive passenger count}: $\leq 0$ (Yellow/Green only).
-  \item \textbf{Negative fare / total amount}.
-\end{itemize}
-
-FHV also checked missing location and dispatching base. FHVHV also checked non-positive trip time and negative driver pay.
-
-\subsection*{Results -- Yellow and Green}
-
-Table~\ref{tab:quality_yellow} shows selected-year quality metrics for Yellow taxi, and Figure~\ref{fig:quality_yg} shows the full trend for both Yellow and Green. Trips outside the valid year range are negligible (a few thousand). \textbf{Zero-distance rate grew from 0.56\% (2012) to 2.88\% (2025)}, likely reflecting app-cancelled trips. Most notably, \textbf{negative fare rose from near-zero before 2020 to 5.85\% in 2025}, consistent with growing digital refund entries. Green taxi shows the same trends but concentrated in outer-borough zones.
+FHV had the most quality issues. Early FHV records showed serious problems with dropoff timestamps. In 2015 and 2016, almost all records had dropoff timestamps earlier than pickup timestamps and many missing pickup and dropoff location IDs. FHVHV was much cleaner than FHV, with more complete columns and better coverage. Some issues remained, especially in 2019, such as non-positive trip miles and negative base passenger fares, but these were minor compared to the full dataset size. Some of the more noticeable issues are displayed in Table \ref{tab:t2_fhv_fhvhv}.
 
 \begin{table}[h]
 \centering
-\caption{Yellow taxi quality summary (selected years).}
-\label{tab:quality_yellow}
-\small
-\begin{tabular}{lrrrr}
+\caption{Selected quality issue rates for FHV and FHVHV.}
+\label{tab:t2_fhv_fhvhv}
+\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}llrrrl}
 \toprule
-Year & Rows (M) & Zero dist.\ (\%) & Neg.\ fare (\%) & Neg.\ total (\%) \\
+Data & Year & Rows (M) & Dropoff$<$pickup & Missing PU & Main numeric issue \\
 \midrule
-2012 & 171.4 & 0.56 & 0.00 & 0.00 \\
-2015 & 146.0 & 0.60 & 0.04 & 0.04 \\
-2020 &  24.6 & 1.34 & 0.38 & 0.38 \\
-2023 &  38.3 & 2.02 & 1.00 & 0.98 \\
-2025 &  48.7 & 2.88 & 5.85 & 2.00 \\
+FHV   & 2015 & 63.4  & 100.00\% & 27.26\% & -- \\
+FHV   & 2016 & 132.1 & 100.00\% & 30.16\% & -- \\
+FHV   & 2025 & 24.9  & 0.00\%   & 82.02\% & -- \\
+FHVHV & 2019 & 234.6 & 0.00\%   & 0.00\%  & 0.25\% neg. fare \\
+FHVHV & 2022 & 212.4 & 0.00\%   & 0.00\%  & 0.02\% nonpos. miles \\
+FHVHV & 2025 & 243.6 & 0.01\%   & 0.00\%  & 0.01\% nonpos. miles \\
 \bottomrule
-\end{tabular}
+\end{tabular*}
 \end{table}
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=1\columnwidth]{t2/yellow_chart.png}
-\includegraphics[width=1\columnwidth]{t2/green_chart.png}
-\caption{Quality issue rates by year: Yellow (top), Green (bottom).}
-\label{fig:quality_yg}
-\end{figure}
+Figure~\ref{fig:t2fhvfhvhv} shows the difference more clearly. For FHVHV, we created a stricter clean view because removing problematic rows did not eliminate much useful data: \texttt{SILVER.FHVHV\_TRIPS\_CLEAN}. This view retains valid pickup years, pickup timestamps within the expected source file month, dropoff times after pickup, positive trip miles and trip time, non-negative fare and driver pay, non-null locations, and non-empty base information. For FHV, we used a lighter clean view: \texttt{SILVER.FHV\_TRIPS\_CLEAN}. This view retains valid pickup years, pickup timestamps within the expected source file month, and non-empty dispatching base numbers. We did not apply strict filters to FHV, as that would remove a very large portion of the dataset.
 
-\subsection*{Results -- FHV and FHVHV}
-
-FHV has the most severe issues (Figure~\ref{fig:quality_ff}). In 2015 and 2016, \textbf{virtually 100\% of records have dropoff before pickup} -- over 63M rows in 2015 and 132M in 2016 -- a systematic failure in early dispatching base reporting. \textbf{Missing location data affects 27\% of pickups and 98\% of dropoffs in 2015}; even in 2023--2025, over 75\% of FHV pickups lack a location ID.
-
-FHVHV is the cleanest dataset: issue rates are \textbf{below 0.1\% for all checks} across all years. Dropoff-before-pickup affects only $\sim$0.005\% of records per year. Negative base fare drops from 0.25\% (2019) to near-zero by 2025.
+The obtained views served as the starting point for all subsequent tasks related to exploratory analysis, augmentation, streaming, machine learning, and more.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=1\columnwidth]{t2/fhv_chart.png}
-\includegraphics[width=1\columnwidth]{t2/fhvhv_chart.png}
-\caption{Quality issue rates: FHV (top), FHVHV (bottom).}
-\label{fig:quality_ff}
+\includegraphics[width=1\columnwidth]{images/t2/fhv_chart.png}
+\includegraphics[width=1\columnwidth]{images/t2/fhvhv_chart.png}
+\caption{Quality issue rates by year for FHV (top) and FHVHV (bottom).}
+\label{fig:t2fhvfhvhv}
 \end{figure}
-
-\subsection*{Clean Views}
-
-Four clean views were created in \texttt{SILVER}. Yellow and Green apply strict filters (valid year, pickup within source month, dropoff after pickup, distance $>$0, non-negative fare, passenger count null or $>$0). FHVHV applies equivalent strict filters. \textbf{FHV applies only a light filter} (valid year, non-empty base) to preserve the large fraction of early records with known systematic issues; downstream analyses work around the known problems explicitly.
 
 %------------------------------------------------
 
-\section*{T3 -- Exploratory Data Analysis}
+\section*{T3: Exploratory data analysis}
 
-All of the exploratory data analysis was computed in Snoflake SQL using clean views generated with \path{scripts/t3/t3.sql}.
+All of the exploratory data analysis was computed in Snowflake SQL using clean views generated with \path{scripts/t3/t3.sql}.
 Visualizations were produced in Snowpark Python (\path{scripts/t3/t3_visualizations.ipynb}).
 
-\subsection*{Dataset Scale}
+\subsection*{Dataset scale}
 
-After cleaning, total trip counts are (Figure~\ref{fig:totals}):\\ 
+After cleaning, the total trip counts are shown in Figure~\ref{fig:totals} and Table~\ref{tab:total_trip_counts}.
+
 \begin{table}[h]
 \centering
+\caption{Total trip counts after cleaning}
 \label{tab:total_trip_counts}
 \small
 \begin{tabular}{lrr}
@@ -280,8 +250,6 @@ FHVHV  & 2019--2026 & 1.52 \\
 Yellow & 2012--2026 & 1.29 \\
 FHV    & 2015--2026 & 0.80 \\
 Green  & 2014--2026 & 0.08 \\
-\midrule
-Total  & 2012--2026 & 3.69 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -289,11 +257,15 @@ Total  & 2012--2026 & 3.69 \\
 \begin{figure}[h]
 \centering
 \includegraphics[width=\columnwidth]{t3/total_trip_count.png}
-\caption{}
+\caption{Bar graph of total trip counts.}
 \label{fig:totals}
 \end{figure}
 
-\subsection*{Temporal Analysis}
+\subsection*{Comparison metrics}
+
+To compare how similarly the four datasets behave, we use cosine similarity for distribution-shaped data. Cosine similarity measures the angle between two vectors rather than their magnitude, so it captures whether two distributions have the same shape regardless of how many total trips each dataset has. For monthly volume, where we care about correlated trends over time rather than shape, we use Pearson correlation instead.
+
+\subsection*{Temporal analysis}
 
 Monthly volume (Figure~\ref{fig:monthly}) reveals three important events: (1) steady Yellow decline from 2014 as rideshare grew; (2) the February 2019 FHVHV regulation, causing FHV to collapse while FHVHV simultaneously emerged; and (3) COVID-19 (March--April 2020), causing an immediate drop in everything. Post-COVID, FHVHV reached new highs by 2022 while Yellow and Green settled at $\sim$25\% of pre-pandemic levels.
 
@@ -313,7 +285,7 @@ Hourly patterns (Figure~\ref{fig:hourly}) for all four datasets follow the same 
 \label{fig:hourly}
 \end{figure}
 
-Day-of-week patterns (Figure~\ref{fig:dow}) are essentially the same for all datasets. Pairwise cosine similarities are 1.00. Friday and Saturday are busiest while Monday is quietest. Variation across days is modest ($\pm$2--3 pp).
+Day-of-week patterns (Figure~\ref{fig:dow}) are essentially the same for all datasets. Pairwise cosine similarities are 1.00. Friday and Saturday are busiest while Monday is quietest. Variation across days is modest ($\pm$2--3 percentage points).
 
 \begin{figure}[h]
 \centering
@@ -322,7 +294,7 @@ Day-of-week patterns (Figure~\ref{fig:dow}) are essentially the same for all dat
 \label{fig:dow}
 \end{figure}
 
-\subsection*{COVID-19 Impact}
+\subsection*{COVID-19 impact}
 
 Monthly trips in 2020 were compared against 2019 (\path{GOLD.T3_COVID_IMPACT}), shown in Figure~\ref{fig:covid_change}. In april 2020 (first full lockdown month) we see Yellow taxi fall by 96\%, Green 93\% and FHVHV 80\%. By December 2020, Yellow and Green remained $\sim$80\% below 2019 levels while FHVHV recovered to within $\sim$46\% of 2019 volume.
 
@@ -333,15 +305,15 @@ Monthly trips in 2020 were compared against 2019 (\path{GOLD.T3_COVID_IMPACT}), 
 \label{fig:covid_change}
 \end{figure}
 
-\subsection*{Spatial Analysis}
+\subsection*{Spatial analysis}
 
 Yellow pickups concentrate in Manhattan (top zones: 237 Midtown, 161 Lincoln Square, 236 Murray Hill) plus airports. Green is almost entirely outer boroughs (top: 74 East New York, 75 Flatbush, 41 Crown Heights North). FHV and FHVHV show broader citywide coverage. The top Yellow OD pair is 264$\to$264 ($\sim$16M trips -- missing location data); excluding artefacts, genuine top pairs are in the Midtown--Upper East Side corridor.
 
-\subsection*{Trip Characteristics}
+\subsection*{Trip characteristics}
 
 Figure~\ref{fig:characteristics} shows yearly trip statistics for Yellow, Green, and FHVHV. Fares rose sharply from 2022 onwards across all three datasets, due to post-pandemic demand fare adjustments. Average trip distance is stable ($\sim$2.5--3.5 miles for Yellow/Green and slightly longer for FHVHV). Trip duration increased noticeably from 2022--2023, consistent with increased traffic congestion.
 
-Payment types is only available for The yellow and green dataset. Yellow is 62.9\% credit card (813M trips), 35.1\% cash (454M). Green is nearly split: 50.1\% cash (40M), 49.4\% credit card (40M), reflecting higher cash usage in outer boroughs.
+Payment types is only available for the Yellow and Green dataset. Yellow is 62.9\% credit card (813M trips), 35.1\% cash (454M). Green is nearly split: 50.1\% cash (40M), 49.4\% credit card (40M), reflecting higher cash usage in outer boroughs.
 
 \begin{figure}[h]
 \centering
@@ -354,7 +326,7 @@ Payment types is only available for The yellow and green dataset. Yellow is 62.9
 
 Within FHVHV, Uber (HV0003) holds 70--75\% of trips and Lyft (HV0005) holds 25--30\% consistently across all years. Both show near-identical trends in distance, fare, and driver pay. Driver pay has grown for both since 2021, consistent with NYC minimum earnings floor regulations.
 
-\subsection*{Cross-Dataset Similarity}
+\subsection*{Cross-dataset similarity}
 
 Figure~\ref{fig:similarity} shows pairwise similarity matrices for four metrics: cosine similarity on hourly, DOW, and spatial distributions, and Pearson correlation on monthly volume.
 
@@ -365,20 +337,25 @@ Figure~\ref{fig:similarity} shows pairwise similarity matrices for four metrics:
 \label{fig:similarity}
 \end{figure}
 
-Temporally, all datasets are essentially identical (all cosine similarities $\geq$0.99). Spatially, datasets diverge sharply: Yellow--Green = 0.08 (complementary service areas), FHV--FHVHV = 0.85 (both citywide). Monthly Pearson $r$ is highest between Yellow and Green ($r = 0.95$, both declining) and lowest between FHVHV and Green ($r = 0.33$, divergent trajectories).
+In terms of when trips happen, all four datasets are essentially interchangeable. Their hourly and day-of-week patterns are nearly identical, with cosine similarities at or above 0.99 in both cases. This means that regardless of which service a passenger uses, the overall rhythm of demand across the day and week is the same.
+
+Where the datasets differ is in where trips happen. Yellow and Green taxis have almost no geographic overlap -- Yellow serves Manhattan, Green serves the outer boroughs -- giving them a very low spatial similarity of 0.08. FHV and FHVHV, on the other hand, both operate citywide, so their spatial similarity is much higher at 0.85.
+
+For monthly volume trends, we use Pearson $r$, which measures how closely two series rise and fall together (1.0 = perfectly in sync, 0.0 = no relationship). Yellow and Green move together most closely ($r = 0.95$): both have been declining in parallel as rideshare took over. FHVHV and Green are the least correlated ($r = 0.33$) because they have gone in opposite directions.
+
 
 %------------------------------------------------
-\section*{T4 -- Storage Format Comparison}
+\section*{T4: Storage format comparison}
 
-\subsection*{Experimental Setup}
+\subsection*{Experimental setup}
 
-We benchmarked four storage formats using the Green 2024 partition (617,885 rows, 24 columns) from \path{SILVER.GREEN_TRIPS_CLEAN}: Parquet with snappy compression (PyArrow \cite{arrow2024}), plain CSV (pandas), gzip-compressed CSV (pandas), and HDF5 with gzip compression (h5py). Snowflake supports Parquet, CSV, and gzip CSV natively via \texttt{COPY INTO} stage exports. HDF5 was benchmarked in Python only.
+We benchmarked five storage formats using the Green 2024 partition (617,885 rows, 24 columns) from \path{SILVER.GREEN_TRIPS_CLEAN}: Parquet with snappy compression (PyArrow \cite{arrow2024}), plain CSV (pandas), gzip-compressed CSV (pandas), HDF5 with gzip compression (h5py), and DuckDB. Snowflake supports Parquet, CSV, and gzip CSV natively via \texttt{COPY INTO} stage exports. HDF5 and DuckDB were benchmarked locally only, as neither can be installed in Snowflake's Snowpark environment.
 
-\subsection*{Measurement Methodology}
+\subsection*{Measurement methodology}
 
 For Python, write time was measured as a single run and read time as the median of three runs from disk. HDF5 used h5py with gzip compression for numeric columns and fixed-length byte strings for text and datetime fields.
 
-For Snowflake, write time was the duration of the \texttt{COPY INTO} query and read time was the duration of a \texttt{COUNT(*)} scan on the staged files. A full \texttt{COUNT(*)} was chosen over \texttt{SELECT *} because staged CSV files carry no schema metadata -- Snowflake cannot infer column names without explicit positional references -- so \texttt{COUNT(*)} was used consistently across all formats to force a full parse.
+For Snowflake, write time was the duration of the \texttt{COPY INTO} query and read time was the duration of a \texttt{COUNT(*)} scan on the staged files. A full \texttt{COUNT(*)} was chosen over \texttt{SELECT *} because staged CSV files carry no schema metadata. Snowflake cannot infer column names without explicit positional references, so \texttt{COUNT(*)} was used consistently across all formats to force a full parse.
 
 \subsection*{Results}
 
@@ -397,6 +374,8 @@ Parquet [Python]    & 15.1 & \textbf{0.11} & 0.82 \\
 CSV [Python]        & 90.4 & 1.21 & 6.84 \\
 CSV.gz [Python]     & \textbf{13.2} & 1.40 & 18.48 \\
 HDF5 [Python]       & 38.9 & 0.30 & \textbf{0.95} \\
+DuckDB [Local]      & 23.6 & 0.62 & 1.76 \\
+\midrule
 Parquet [Snowflake] & 14.4 & 0.42 & 2.12 \\
 CSV [Snowflake]     & 94.6 & 0.52 & 2.86 \\
 CSV.gz [Snowflake]  & 14.0 & 0.60 & 3.23 \\
@@ -404,7 +383,7 @@ CSV.gz [Snowflake]  & 14.0 & 0.60 & 3.23 \\
 \end{tabular}
 \end{table}
 
-\begin{figure*}[h]
+\begin{figure*}[t]
 \centering
 \includegraphics[width=\textwidth]{t4/grapf_comparison.png}
 \caption{Format benchmark: file size, read speed, and write speed for all format/engine combinations.}
@@ -415,26 +394,28 @@ Parquet (snappy) is the clear winner for analytical workloads: 0.11 s read time 
 
 Gzip CSV achieves the smallest file size (13.2 MB) but at a steep cost: write takes 18.5 s, over 22$\times$ slower than Parquet, because gzip compression is single-threaded and CPU-intensive. This format makes sense only for long-term archival where read and write speed are secondary concerns.
 
-Plain CSV is the weakest option overall -- it is 6$\times$ larger than Parquet with no speed advantage. Its only practical benefit is broad tool compatibility.
+Plain CSV is the weakest option overall, it is 6$\times$ larger than Parquet with no speed advantage. Its only practical benefit is broad tool compatibility.
 
 HDF5 sits in the middle: 38.9 MB, 0.30 s read, and 0.95 s write. It is a reasonable choice for Python-only workflows, but it is unsupported in Snowflake and requires more complex code to read and write than Parquet or CSV.
+
+DuckDB was benchmarked locally since it cannot be installed in Snowflake's Snowpark environment. It produced a 23.6 MB file, read in 0.62 s, and write in 1.76 s. This puts it between HDF5 and Parquet on read speed, and between Parquet and HDF5 on file size. DuckDB is a strong option for local analytical workflows where the full Snowflake stack is not available, but its embedded file format is not portable across different tools the way Parquet is.
 
 Snowflake read times (0.42--0.60 s) are higher than the equivalent Python reads because they include query planning and distributed execution overhead. The relative ordering across formats is the same as in Python, with Parquet still the fastest. Snowflake write times are also higher than local Python writes because Snowflake encrypts and uploads data to its internal object store.
 
 
 %------------------------------------------------
 
-\section*{T5 -- Data Augmentation}
+\section*{T5: Data augmentation}
 
 Each cleaned trip table was enriched with four categories of external contextual data: weather at pickup time, school density in the pickup zone, attraction density in the pickup zone, and the number of active permitted events in the pickup borough. All data was fetched directly inside Snowflake using Python stored procedures with external network access (\path{scripts/t5/t5_fetch_data.sql}), so no local ETL was required. The final enriched tables are stored as \path{GOLD.T5_YELLOW}, \path{GOLD.T5_GREEN}, \path{GOLD.T5_FHV}, and \path{GOLD.T5_FHVHV}.
 
-\subsection*{Taxi Zone Reference Tables}
+\subsection*{Taxi zone reference tables}
 
 Two reference tables are used in all spatial joins. \path{EXTERNAL_DATA.TAXI_ZONE_LOOKUP} is the standard TLC zone lookup CSV, downloaded directly from the TLC website and loaded into Snowflake as-is. It maps each of the 263 location IDs to a borough, zone name, and service zone. \path{EXTERNAL_DATA.TAXI_ZONES_GEOM} holds the actual polygon geometry for each zone, used for point-in-polygon lookups. The TLC shapefile was reprojected from EPSG:2263 to EPSG:4326 using GeoPandas (\path{scripts/t5/convert_taxi.ipynb}), serialised to WKT, and loaded into Snowflake where the geometry column was created with \texttt{TO\_GEOGRAPHY()}.
 
-\subsection*{External Data Sources}
+\subsection*{External data sources}
 
-Daily weather data for NYC was fetched from the Open-Meteo historical API \cite{openmeteo2024} in five 3-year chunks to stay within request size limits. Three variables were retrieved -- daily maximum temperature, minimum temperature, and precipitation sum -- and joined to trips by pickup date.
+Daily weather data for NYC was fetched from the Open-Meteo historical API \cite{openmeteo2024} in five 3-year chunks to stay within request size limits. Three variables were retrieved, daily maximum temperature, minimum temperature, and precipitation sum, and then joined to trips by pickup date.
 
 School locations were fetched from the NYC Open Data portal (dataset \texttt{n3p6-zve2}, 2019--20 School Locations) via the Socrata API. Coordinates were extracted from the nested GeoJSON response and each school was spatially joined to its taxi zone using \texttt{ST\_CONTAINS()}. The result is a school count per zone stored in \path{EXTERNAL_DATA.T5_SCHOOLS_BY_ZONE}.
 
@@ -442,37 +423,159 @@ Museum and attraction locations were fetched from NYC Open Data (dataset \texttt
 
 Permitted public event data was fetched from NYC Open Data (dataset \texttt{bkfu-528j}) for 2020--2024 in quarterly chunks of 16 requests to respect the 10,000-row API limit \cite{nycopen2024}. Each event was expanded across its active hours in \path{scripts/t5/t5.sql} using the functions \texttt{ARRAY\_GENERATE\_RANGE} and \texttt{LATERAL FLATTEN}. The events with no recorded end time were assumed to last 3 hours. The result is an active event count per hour and borough, joined to trips by truncated pickup hour and borough.
 
-
-\subsection*{Final Enriched Tables}
+\subsection*{Final enriched tables}
 
 The gold join script (\path{scripts/t5/t5_gold.sql}) temporarily scales the Snowflake warehouse to \texttt{LARGE} to handle base tables of up to 1.52B rows. Each output row contains all original trip columns plus \texttt{BOROUGH}, \texttt{ZONE}, \texttt{SERVICE\_ZONE}, \texttt{TEMP\_MAX\_C}, \texttt{TEMP\_MIN\_C}, \\  \texttt{PRECIPITATION\_MM}, \texttt{SCHOOL\_COUNT}, \texttt{ATTRACTION\_COUNT}, and \texttt{ACTIVE\_EVENTS}.
 
 %------------------------------------------------
 
-\section*{T8 -- Impact of FHVHV on Traditional Services}
+\section*{T6: Streaming with Kafka}
 
-\subsection*{Regulatory Context}
+We treated the historical trip information as a stream and chose the year 2021 to combine the two data sources: Yellow Taxi and the FHVHV dataset. Because using the streaming API and streaming into Snowflake adds additional costs, the producer was limited to a smaller sample, especially since we had to experiment with several approaches to make it work on Snowflake and did not want to increase costs by too much.
 
-Before February 2019, Uber and Lyft reported under the FHV dataset. The FHVHV regulation required operators dispatching more than 10,000 trips per day to obtain a new HVFHS licence and report under the separate FHVHV category. This caused FHV monthly counts dropping from around 24M in January 2019 to 1--2M in the following months, while FHVHV simultaneously emerged at around 18--20M trips per month. Any analysis must account for this break. Two smaller operators, Juno (\texttt{HV0002}) and Via (\texttt{HV0004}), also appeared briefly in FHVHV data with under 2\% share each before exiting the NYC market in 2019.
+The streaming setup was implemented using Docker (configuration located in \path{scripts/t6/docker-compose.yaml}) and Kafka, which included two Kafka brokers and a Kafka Connect service. Kafka Connect is used with the Snowflake Kafka Connector to ingest Kafka messages directly into Snowflake through the Snowpipe Streaming workflow.
 
-\subsection*{Absolute Trip Volumes}
+We worked with two Kafka topics, \path{t6-yellow-2021} and \path{t6-fhvhv-2021}, so we could replay the records and monitor them independently. In Snowflake, we first created \path{GOLD.T6_STREAM_SOURCE_2021}, a table that combines records from \path{SILVER.YELLOW_TRIPS_CLEAN} and \path{SILVER.FHVHV_TRIPS_CLEAN} into a common schema. We also added two extra columns: \path{dataset} and \texttt{stream\_id}, which is based on pickup time order. The producer (\path{scripts/t6/producer_t6_2021.py}) reads this table, ordered by \path{stream_id}, to send each row as a JSON message to the correct Kafka topic in proper order, allowing us to simulate the streaming process.
 
-Yellow taxi peaked at around 170M trips per year in 2012--2013, when it held effectively 100\% of the tracked for-hire vehicle market. By 2018 it had fallen to around 82M ($-$52\%) and by 2023--2024 to around 40M, a 76\% reduction from its peak. Green taxi never exceeded around 20M trips per year and has since fallen to near zero. After the 2019 regulatory transition, Uber settled at around 160--180M trips per year and Lyft at around 50--65M.
+To transfer data from Kafka to Snowflake, the Kafka Connector first writes messages to \path{GOLD.T6_KAFKA_LANDING_2021}, storing the JSON message in \path{RECORD_CONTENT} and key metadata (topic, partition, offset) in \path{RECORD_METADATA}. This table contains raw JSON, which is then parsed into standard columns in the view \path{GOLD.T6_STREAM_EVENTS_2021}.
 
-\subsection*{Market Share Evolution}
+The next task was stream analysis, for which we aggregated events into hourly buckets and then computed rolling statistics over 24 hours, where each window included the current hour and the previous 23 hours. We calculated the count, mean, and standard deviation for the three key attributes: \path{trip_distance}, \path{trip_duration_sec}, and \path{fare_amount}. These calculations were performed separately for each borough and for the top 10 most active locations, which we selected by combining the number of pickups and dropoffs and choosing the most active ones. Figure \ref{fig:t6stats} shows a preview of the tables created in Snowflake that include the 24-hour statistics.
 
-Figure~\ref{fig:stacked} shows stacked annual share over time. Yellow held close to 100\% in 2012, fell below 50\% by mid-2016, and was at around 22\% just before the FHVHV transition. After February 2019, Uber immediately captured around 50\% of all tracked trips and has since stabilised at 55--60\%. Lyft holds a steady 20--22\%. Yellow has settled at around 13--15\% since 2021 and Green is below 1\%.
-
-\begin{figure*}[h]
+\begin{figure}[h]
 \centering
-\includegraphics[width=0.8\textwidth]{t8/staked_market.png}
+\includegraphics[width=1\columnwidth]{images/t6/rolling_borough_stats.png}
+\includegraphics[width=1\columnwidth]{images/t6/rolling_top_locations_stats.png}
+\caption{Rolling 24-hour statistics by borough (top) and for the top 10 locations (bottom).}
+\label{fig:t6stats}
+\end{figure}
+
+The last part of this task was to apply stream clustering, for which we implemented a Kafka consumer (\path{scripts/t6/consumer_t6_birch_2021.py}) that subscribes to both Kafka topics and processes messages. We chose the BIRCH algorithm, which is suitable for this task because it supports incremental fitting with partial\_fit, allowing us to update the model without loading the entire stream in advance. BIRCH incrementally builds a compact clustering-feature tree, summarizing similar points into subclusters. First, we performed feature engineering to convert our features of interest into numeric values (dataset flag, cyclic hour and weekday encodings, pickup and dropoff location IDs, trip distance, trip duration, and fare amount).
+
+During streaming, we trained the model with \texttt{n\_clusters=None}, which allows it to build the internal tree structure incrementally. We then summarize the obtained results into final clusters, which we set to 6 in our case, so the results are quickly interpretable. Results are saved as \path{CSV} files in \path{scripts/t6} and also written back to Snowflake as tables. Figure \ref{fig:t6birch} shows the final summarized results of the BIRCH stream clustering.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=1\columnwidth]{t6/birch_clustering_summary.png}
+\caption{Summary of the final BIRCH stream clustering result.}
+\label{fig:t6birch}
+\end{figure}
+
+From the figure, we can see that some clusters consist entirely of Yellow taxi trips and are oriented toward Manhattan or the airports, while others are dominated by FHVHV and are more dispersed. This indicates some overlap, but also distinct usage patterns.
+
+%------------------------------------------------
+
+\section*{T7: City-wide demand forecasting}
+
+\subsection*{Methodology}
+
+For the batch machine learning project, we chose the city-wide demand forecasting problem. Our goal was to predict hourly ride demand using information from all four datasets. This allows for better resource planning and helps us understand how demand changes depending on the type of service.
+
+Using \path{scripts/t7/t7.sql}, we created our main feature table, \texttt{GOLD.T7\_DEMAND\_FEATURES}. Each entry represents one hourly demand observation for a service and a pickup zone: \texttt{dataset + pickup\_location\_id + pickup\_hour}. The target was \\ \texttt{TRIP\_COUNT}, but for training, we transformed it to \texttt{LOG\_TRIP\_COUNT = LN(1 + TRIP\_COUNT)} because demand is highly skewed, which means that many zone-hour combinations have low demand, while some have very high demand. For predictions, we scaled back to the original scale to have a fair evaluation.
+
+Because we are working with temporal data, the data split for training and evaluation must be based on time, not random selection. For the training set, we used the common hourly range where all four datasets and the T5 weather data were available, starting in 2019, up to the beginning of 2024. For the validation set, we used data from 2024, and for the test set, data from 2025.
+
+We also wanted to see how much the augmented feature set could influence and improve the final predictions. The baseline set included features such as service type, pickup zone, time features (weekend, rush-hour, night flags), cyclic encodings (hour, day, month cyclic features), lag features (1h, 24h, 168h), and rolling averages (24h, 168h). The augmented set included all of these, and also added external data from the T5 task, such as information about weather, number of schools, attractions, and active events.
+
+For algorithm selection, we chose \texttt{XGBoost} as a native distributed third-party algorithm and \texttt{SGDRegressor.partial\_fit} to represent scikit-learn algorithm with partial\_fit. The third algorithm we included was \texttt{PyTorch DDP} (Distributed Data Parallel), implemented as a simple custom neural network in PyTorch. This was an alternative to the Dask-ML category, which we could not install or run in the Snowflake environment. Since PyTorch usage was documented under the distributed training on Snowflake, we included it for additional comparison. To perform the task in a distributed manner, XGBoost used Snowflake ML data connectors, PyTorch used sharded data connectors, and SGD read the data in batches.
+
+We did our distributed experiments in a Snowflake Container Runtime using a Ray cluster, which is Snowflake's method for scaling and utilizing distributed capabilities. It runs as a background process that we can easily connect to and scale dynamically during development. In our testing, we scaled the cluster to different numbers of workers and measured training time, prediction time, error metrics, process memory, and GPU memory.
+
+\subsection*{Main model results and different experiments}
+
+Table~\ref{tab:t7mainresults} summarizes the most important runs. The main quality metrics used are MAE, RMSE, and $R^2$, computed on the 2025 test set. Full results are available as \texttt{CSV} files in \path{scripts/t7_t10/}.
+
+\begin{table}[h]
+\centering
+\caption{Main T7 model results on the 2025 test set.}
+\label{tab:t7mainresults}
+\scriptsize
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{llrrrrrr}
+\toprule
+Model & Setup & Workers & Train s & MAE & RMSE & $R^2$ & Proc. MB \\
+\midrule
+XGBoost & global baseline GPU & 4 & 134.69 & 9.40 & 29.96 & 0.852 & 1289.79 \\
+XGBoost & global augmented GPU & 4 & 137.83 & 9.44 & 30.77 & 0.844 & 1304.43 \\
+XGBoost & separate augmented GPU & 4 & 511.86 & 6.37 & 21.84 & 0.921 & 1422.24 \\
+PyTorch DDP & global baseline GPU & 2 & 150.38 & 5.14 & 27.17 & 0.878 & 3241.93 \\
+PyTorch DDP & separate baseline GPU & 2 & 183.39 & 8.51 & 69.82 & 0.194 & 2293.60 \\
+SGD & augmented partial\_fit & 1 & 69.68 & 64.62 & 417.44 & -27.80 & 3261.07 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+Based on the results, the aggregated separate XGBoost models performed best. We trained one model for each service type and then aggregated their test errors, addressing our question of comparing a single global model to an aggregation of four separate models (FHV, FHVHV, Green, Yellow). For XGBoost, the separate approach gave better results: RMSE improved from 29.96 to 21.84, and $R^2$ increased from 0.852 to 0.921.
+
+For PyTorch, the result was reversed: the single global PyTorch model performed better than the aggregated separate PyTorch models. This suggests that our neural network benefited from a combined training set and shared patterns. For the architecture, we used a simple feed-forward neural network with two hidden layers of size 64, ReLU activations, and one output neuron. For training, we used the Adam optimizer and mean squared error loss.
+
+Table \ref{tab:t7singleagg} presents the results in a separate table. We display the RMSE metric because it penalizes large forecasting errors and outliers, which are particularly problematic when planning resources in our case.
+
+\begin{table}[h]
+\centering
+\caption{Single global model vs. aggregation of four separate models.}
+\label{tab:t7singleagg}
+\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lrrl}
+\toprule
+Algorithm & Global RMSE & Separate RMSE & Better approach \\
+\midrule
+XGBoost & 29.96 & 21.84 & Separate models \\
+PyTorch DDP & 27.17 & 69.82 & Global model \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+For augmentation, we found that it did not help the XGBoost model, as the RMSE increased from 29.96 to 30.77. This suggests that the most important information for modeling is already captured by recent demand and weekly patterns, so additional augmentation does not provide any useful benefit for this model. For PyTorch (4-worker run), augmentation was helpful, as the RMSE decreased from 68.04 to 44.52, and for SGD it decreased from 563.01 to 417.44, so the external features were useful for these two models.
+
+To test scalability, we increased the number of Ray cluster workers. For XGBoost, we could not run it with only one worker due to insufficient memory, so we tested with two and four GPU workers. This reduced training time, and accuracy remained about the same. For PyTorch, training time decreased even further. Increasing from one to two workers also improved model accuracy, which was another significant benefit. Full results are shown in Table \ref{tab:t7scaling}.
+
+\begin{table}[h]
+\centering
+\caption{Worker-scaling results for GPU models.}
+\label{tab:t7scaling}
+\scriptsize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}llrrr}
+\toprule
+Algorithm & Setup & Workers & Train s & RMSE \\
+\midrule
+XGBoost & global baseline & 2 & 146.80 & 29.92 \\
+XGBoost & global baseline & 4 & 134.69 & 29.96 \\
+PyTorch DDP & global baseline & 1 & 201.07 & 109.94 \\
+PyTorch DDP & global baseline & 2 & 150.38 & 27.17 \\
+PyTorch DDP & global baseline & 4 & 116.61 & 68.04 \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+SGD was used as a simple baseline because it is not natively distributed. The model is sequential, and with Ray on Snowflake, we cannot automatically synchronize a shared scikit-learn model across all workers. Because of that, we tested SGD with only one worker and focused on the other two models (XGBoost and PyTorch) for more advanced evaluations and testing under different conditions. As expected, SGD is quite fast, but it is not accurate enough, as it struggles significantly with the nonlinear problem we are addressing.
+
+Overall, we solved this problem using machine learning approaches and demonstrated that we can estimate expected demand across the entire city and test different modeling strategies, which depend on the model, to determine which performs best.\\
+
+%------------------------------------------------
+
+\section*{T8: Impact of FHVHV on traditional services}
+
+\subsection*{Regulatory context}
+
+Before February 2019, Uber and Lyft reported under the FHV dataset. The FHVHV regulation required operators dispatching more than 10,000 trips per day to obtain a new HVFHS licence and report separately. FHV monthly counts immediately dropped from around 24M to 1--2M, while FHVHV simultaneously emerged at 18--20M trips per month. Any analysis must treat this as a structural break, not a real volume change. Two smaller operators, Juno (\texttt{HV0002}) and Via (\texttt{HV0004}), briefly appeared in FHVHV data with under 2\% share before exiting NYC in 2019.
+
+\subsection*{Market share evolution}
+
+Yellow taxi peaked at around 170M trips per year in 2012--2013 with effectively 100\% market share. By 2018 it had fallen to around 82M ($-$52\%) and by 2023--2024 to around 40M, a 76\% drop from peak. Green never exceeded 20M trips per year and has since fallen to near zero. After the 2019 transition, Uber settled at 160--180M trips per year and Lyft at 50--65M.
+
+Figure~\ref{fig:stacked} shows the stacked annual share. Yellow held close to 100\% in 2012, fell below 50\% by mid-2016, and was at around 22\% just before the FHVHV transition. Uber immediately captured around 50\% of all tracked trips in 2019 and has since stabilised at 55--60\%. Lyft holds a steady 20--22\%, Yellow around 13--15\%, and Green below 1\%.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\columnwidth]{t8/staked_market.png}
 \caption{Stacked annual market share by operator.}
 \label{fig:stacked}
-\end{figure*}
+\end{figure}
 
-\subsection*{Before vs.\ After FHVHV}
+\subsection*{Before vs.\ after FHVHV}
 
-To isolate the impact of FHVHV from COVID distortions, we compared average monthly trips in the pre-FHVHV period (2015--2018) against the post-recovery period (2021--2024), shown in Figure~\ref{fig:beforeafter}. Yellow fell from around 10.5M to around 3.0M monthly trips ($-$71\%). Green fell from around 1.0M to near zero ($-$95\%). FHV (other) fell from around 13.5M to around 1.5M ($-$88\%), though most of this reflects the regulatory transfer of Uber and Lyft trips to the FHVHV category rather than real volume loss.
+To isolate the FHVHV impact from COVID distortions, we compared average monthly trips in 2015--2018 against 2021--2024. Figure~\ref{fig:beforeafter} shows the result. Yellow fell from around 10.5M to 3.0M monthly trips ($-$71\%). Green fell from 1.0M to near zero ($-$95\%). FHV (other) fell $-$88\%, though most of this reflects the regulatory reclassification of Uber and Lyft rather than actual volume loss.
 
 \begin{figure}[h]
 \centering
@@ -481,9 +584,9 @@ To isolate the impact of FHVHV from COVID distortions, we compared average month
 \label{fig:beforeafter}
 \end{figure}
 
-\subsection*{Annual Growth Rates}
+\subsection*{Annual growth rates}
 
-Figure~\ref{fig:growth} shows year-over-year growth rates. Yellow declined around $-$10\% per year from 2013 to 2018, crashed $-$72\% in 2020, and partially recovered by $+$23\% in 2021. Green followed a steeper decline of $-$15 to $-$30\% per year throughout its history, with a $-$75\% COVID crash. Uber and Lyft contracted around $-$40\% in 2020, rebounded $+$20--25\% in 2021, and have remained broadly stable since 2022.
+Figure~\ref{fig:growth} shows year-over-year growth rates. Yellow declined around $-$10\% per year from 2013 to 2018, crashed $-$72\% in 2020, and recovered $+$23\% in 2021. Green dropped $-$15 to $-$30\% per year throughout, with a $-$75\% COVID crash. Uber and Lyft contracted $-$40\% in 2020, rebounded $+$20--25\% in 2021, and have been broadly stable since.
 
 \begin{figure}[h]
 \centering
@@ -494,47 +597,126 @@ Figure~\ref{fig:growth} shows year-over-year growth rates. Yellow declined aroun
 
 %------------------------------------------------
 
-\section*{T9 -- Geographic Visualization}
+\section*{T9: Geographic visualization}
 
-\subsection*{Rendering Methodology}
+T9 maps the T2 quality results and selected T3 findings onto NYC's 263 taxi zones. Maps were produced in \path{scripts/t9/t9_map.ipynb} using matplotlib; zone geometries were fetched via \texttt{ST\_ASGEOJSON()} from \path{EXTERNAL_DATA.TAXI_ZONES_GEOM} and rendered as polygon patches. Supporting aggregation tables were created in \path{scripts/t9/t9.sql}.
 
-Maps were produced in \path{scripts/t9/t9_map.ipynb} using matplotlib. Zone geometries were fetched from \path{EXTERNAL_DATA.TAXI_ZONES_GEOM} via \texttt{ST\_ASGEOJSON()}, parsed in Python for both \texttt{Polygon} and \texttt{MultiPolygon} types, and rendered as matplotlib \texttt{Polygon} patches. Zones with no data were rendered grey. The map extent was fixed to the NYC bounding box with equal aspect ratio.
+\subsection*{T2: Data quality per zone}
 
-\subsection*{Data Quality per Zone}
-
-The T2 quality checks were re-applied per pickup zone against the raw (uncleaned) SILVER tables in \path{GOLD.T9_QUALITY_BY_ZONE}: zero distance, pickup equals dropoff, dropoff before pickup, and negative fare. Results were combined into \texttt{TOTAL\_ISSUE\_PCT}. The colour scale (YlOrRd) was \textbf{clamped to the 95th percentile} to prevent extreme outliers from compressing the palette.
-
-Figure~\ref{fig:quality_map} shows the geographic distribution of quality issues. \textbf{FHVHV is uniformly light} (low issues) across the city. Yellow has isolated hotspots in a few Manhattan zones and airports. FHV shows the most widespread elevated rates (orange/red), particularly in zones with historically high rates of missing location data.
+The T2 quality checks were re-applied per pickup zone against the raw SILVER tables and stored in \path{GOLD.T9_QUALITY_BY_ZONE}. Four issue types were summed per zone; zero distance, pickup equals dropoff, dropoff before pickup, and negative fare, into a single percentage score. The colour scale is clamped at the 95th percentile so outlier zones do not compress the rest of the palette.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\columnwidth]{t9/issues_map.png}
-\caption{Quality issue rate per taxi zone (YlOrRd, 95th-pct clamped). Grey = no data.}
+\includegraphics[width=0.9\columnwidth]{t9/issues_map.png}
+\caption{T2 quality issue rate per zone, all four datasets.}
 \label{fig:quality_map}
 \end{figure}
 
-\subsection*{Trip Volume per Zone}
+Figure~\ref{fig:quality_map} shows the result. FHVHV is uniformly clean across the city. Yellow has a few isolated hotspots near Midtown and the airports. FHV has the most widespread elevated rates, particularly in zones with historically high rates of missing location data.
 
-A geographic mapping of T4 format benchmark results is not meaningful -- read/write speed is a property of the machine and format, not location. Instead, Figure~\ref{fig:volume_map} maps total trip volume per zone across all years from \path{GOLD.T3_PICKUP_LOCATION_DIST}, using a \textbf{logarithmic colour scale} (Blues) to handle the large dynamic range between Manhattan and outer-borough zones.
+\subsection*{T3: Trip volume per zone}
+
+Trip volume per zone across all years is taken from \path{GOLD.T3_PICKUP_LOCATION_DIST} and plotted on a logarithmic colour scale (Blues), since the range between Manhattan and outer-borough zones spans several orders of magnitude.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\columnwidth]{t9/volumne_map.png}
-\caption{Trip volume per zone, all years, log scale.}
+\includegraphics[width=0.9\columnwidth]{t9/volumne_map.png}
+\caption{T3 trip volume per zone, all years, log scale.}
 \label{fig:volume_map}
 \end{figure}
 
-The maps confirm T3 spatial findings. \textbf{Yellow} concentrates in Manhattan and airports; outer boroughs are nearly absent. \textbf{Green} shows the inverse -- dense in outer boroughs, near-zero in Manhattan below 96th Street. \textbf{FHV} is diffuse across all boroughs. \textbf{FHVHV} has the most uniform citywide coverage, with substantial volume in virtually every zone.
+Figure~\ref{fig:volume_map} confirms the T3 spatial findings: Yellow concentrates in Manhattan and airports, Green in the outer boroughs, FHV is diffuse across all boroughs, and FHVHV has the most uniform citywide coverage.
+
+\subsection*{T3: COVID-19 impact per zone}
+
+Figure~\ref{fig:covid_map} shows the percentage change in Yellow taxi trips per zone between 2019 and 2020, from \path{GOLD.T9_COVID_BY_ZONE}. The diverging RdYlGn scale is centred at $-$70\% since the decline was severe everywhere; green zones declined less, red zones more.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\columnwidth]{t9/covidimpact.png}
+\caption{Yellow taxi trip change 2020 vs.\ 2019 by zone.}
+\label{fig:covid_map}
+\end{figure}
+
+Airport and Midtown zones, which depend on business and tourist travel, saw the steepest declines. Residential outer-borough zones show relatively smaller drops, partly because their pre-COVID baseline was already low.
+
+\subsection*{T3: Peak hour per zone}
+
+Figure~\ref{fig:peak_map} shows the peak Yellow taxi pickup hour per zone, from \path{GOLD.T9_HOURLY_BY_ZONE}. The twilight\_shifted colormap places midnight at both ends and noon at the centre.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\columnwidth]{t9/peakhourmap.png}
+\caption{Peak Yellow taxi pickup hour by zone (0--23).}
+\label{fig:peak_map}
+\end{figure}
+
+Most Manhattan zones peak in the evening (18:00--20:00), consistent with T3. Airport zones peak in the afternoon due to flight schedules. Business district zones show a morning peak around 08:00--09:00.
+
+\subsection*{T3: Post-COVID recovery per zone}
+
+Figure~\ref{fig:recovery_map} shows 2024 average monthly Yellow taxi trips as a percentage of 2019, from \path{GOLD.T9_RECOVERY_BY_ZONE}. The scale is centred at 50\% to reflect that citywide Yellow recovery is well below full. Values above 100\% mean the zone has exceeded its 2019 level.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\columnwidth]{t9/covid_recovery.png}
+\caption{Yellow taxi recovery: 2024 avg.\ monthly trips as \% of 2019.}
+\label{fig:recovery_map}
+\end{figure}
+
+Most zones remain below 50\% recovery. Tourist-adjacent zones show stronger recovery; Midtown and Financial District zones remain furthest below their 2019 baselines.
+%------------------------------------------------
+
+\section*{T10: Distributed CPU and GPU processing}
+
+This is an extension of the T7 forecasting task, except that we now focus on distributed CPU/GPU execution and scalability, while the rest of the workflow remains the same as previously described. The main component enabling this is the Snowflake Container Runtime using Ray clusters, which we used for distributed XGBoost GPU training, distributed XGBoost CPU training, and distributed PyTorch DDP GPU training. Table \ref{tab:t10distributed} shows key results. The memory columns report the peak process memory and peak GPU memory observed during the run.
+ 
+\begin{table}[h]
+\centering
+\caption{Distributed CPU/GPU and scalability results for T10.}
+\label{tab:t10distributed}
+\scriptsize
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{llrrrrrr}
+\toprule
+Model & Compute setup & Workers & Train s & RMSE & $R^2$ & Proc. MB & GPU MB \\
+\midrule
+XGBoost & global augmented CPU & 4 & 154.43 & 33.82 & 0.811 & 594.00 & 0 \\
+XGBoost & global augmented GPU & 4 & 137.83 & 30.77 & 0.844 & 1304.43 & 528 \\
+XGBoost & global baseline GPU & 2 & 146.80 & 29.92 & 0.852 & 1219.78 & 769 \\
+XGBoost & global baseline GPU & 4 & 134.69 & 29.96 & 0.852 & 1289.79 & 514 \\
+PyTorch DDP & global baseline GPU & 1 & 201.07 & 109.94 & -0.996 & 3743.36 & 24.93 \\
+PyTorch DDP & global baseline GPU & 2 & 150.38 & 27.17 & 0.878 & 3241.93 & 24.93 \\
+PyTorch DDP & global baseline GPU & 4 & 116.61 & 68.04 & 0.235 & 2791.51 & 24.93 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+The CPU/GPU comparison shows that GPU-based distributed XGBoost performed better in this setup: training time decreased from 154.43 s to 137.83 s, and RMSE improved from 33.82 to 30.77. Increasing the number of GPU workers was also beneficial. As previously observed in T7, PyTorch DDP achieved greater speedup in training time and improved accuracy when increasing the number of workers from 1 to 2. This demonstrates that the T7 forecasting task was executed with distributed CPU and GPU processing, with distributed XGBoost proving to be the most reliable model.
 
 %------------------------------------------------
 
 \section*{Conclusion}
 
-We implemented a complete big data pipeline for \textbf{3.7 billion} NYC TLC taxi records on Snowflake (Bronze/Silver/Gold architecture), covering ingestion, schema unification, quality assessment, EDA, format benchmarking, external data augmentation, market analysis, and geographic visualization.
+We built a complete big data pipeline for 3.7 billion NYC TLC taxi records, covering ingestion, schema unification, quality assessment, exploratory analysis, format benchmarking, external data augmentation, market impact analysis, and geographic visualization.
 
-Key findings: (1) \textbf{The February 2019 FHVHV regulation} was the single largest structural event -- more impactful than COVID-19 -- immediately reorganising market reporting and crystallising Uber at $\sim$55--60\% market share. (2) \textbf{COVID-19} caused a $>$90\% drop in traditional taxi demand in April 2020; Yellow and Green recovered to only $\sim$25\% of pre-pandemic volumes, while FHVHV reached new highs by 2022. (3) \textbf{All four service types share identical temporal demand shapes} (hourly cosine $\geq$0.99, DOW cosine 1.00), confirming a uniform underlying urban mobility rhythm. (4) \textbf{Spatial distributions diverge sharply}: Yellow--Green cosine 0.08 (complementary areas); FHV--FHVHV 0.85 (overlapping citywide markets). (5) \textbf{Parquet (snappy) is the optimal format}: $11\times$ faster reads than CSV, competitive file size, and native support in both Python and Snowflake.
+The February 2019 FHVHV regulation was the single most significant structural event in the dataset, more disruptive than COVID-19 in terms of market reorganisation. It immediately transferred Uber and Lyft from the FHV reporting category to a new one, collapsing FHV counts and crystallising Uber at a 55--60\% market share where it has remained ever since.
 
-The enriched T5 GOLD tables (weather, schools, attractions, events) provide a foundation for downstream demand modelling and causal analysis.
+COVID-19 caused a severe but temporary demand collapse in April 2020: Yellow and Green taxi trips fell by over 90\%, FHVHV by around 80\%. Yellow and Green never fully recovered, settling at roughly a quarter of their pre-pandemic volumes, while FHVHV reached new highs by 2022. The geographic maps in T9 show that the impact and recovery were not uniform.
+
+Despite serving different areas and customer bases, all four service types share essentially identical temporal patterns. Spatially, however, the services are very different: Yellow and Green have almost no geographic overlap (cosine 0.08), while FHV and FHVHV serve broadly the same city (cosine 0.85).
+
+For storage format, Parquet with snappy compression is the clear choice for this kind of analytical workload, since it was 11 times faster to read than plain CSV in Python, competitive file size, and natively supported in both Python and Snowflake.
+
+\subsection*{Snowflake as a Big Data Platform}
+
+As mentioned at the beginning we used Snowflake instead of a HPC cluster. This was mainly a positive decision.
+
+Snowflake's elastic compute made it easy to scale up for expensive joins (T5 gold tables over 1.52B rows) and scale back down for lighter queries. The columnar storage with automatic micro-partition pruning made year-filtered scans over multi-billion-row tables fast without manual partitioning. Built-in geospatial functions (\texttt{ST\_CONTAINS}, \texttt{ST\_ASGEOJSON}) removed the need for a separate spatial processing step in T5 and T9. Python stored procedures with external network access allowed us to fetch all external data (weather, schools, attractions, events) directly inside Snowflake without any local ETL infrastructure. SQL features like \texttt{QUALIFY}, \texttt{LATERAL FLATTEN}, and \texttt{ARRAY\_GENERATE\_RANGE} handled tasks that would have required custom Python logic on a traditional cluster.
+
+The main issues were due to format support and benchmarking methodology. Snowflake does not support HDF5 or DuckDB, so those could only be tested in Python. For the T4 read benchmark, \texttt{SELECT *} cannot be used on staged CSV files because CSV carries no schema metadata. We used \texttt{COUNT(*)} as a consistent alternative. Due to this a direct time comparisons between the two environments was not exact.
+
 
 %------------------------------------------------
 
