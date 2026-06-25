@@ -699,15 +699,13 @@ The CPU/GPU comparison shows that GPU-based distributed XGBoost performed better
 
 \section*{Conclusion}
 
-We built a complete big data pipeline for 3.7 billion NYC TLC taxi records, covering ingestion, schema unification, quality assessment, exploratory analysis, format benchmarking, external data augmentation, market impact analysis, and geographic visualization.
+We have built a complete big data pipeline for the NYC TLC trips that has approximately 3.7 billion records. Project has covered ingestion, schema unification, data quality checks, exploratory analysis, formats benchmarking, external data augmentation, streaming analysis, machine laerning, market impact analysis, and geographic visualization. We have nicely seperated everything on the Snowflake platform into clear layers, so we have access to the raw, cleaned and aggregated outputs.
 
-The February 2019 FHVHV regulation was the single most significant structural event in the dataset, more disruptive than COVID-19 in terms of market reorganisation. It immediately transferred Uber and Lyft from the FHV reporting category to a new one, collapsing FHV counts and crystallising Uber at a 55--60\% market share where it has remained ever since.
+The February 2019 FHVHV regulation was the single most significant structural event in the dataset. It immediately transferred Uber and Lyft from the FHV reporting category to a new one, collapsing FHV counts and crystallising Uber at a 55--60\% market share where it has remained ever since. COVID-19 then caused the largest short-term demand shock. Yellow and Green taxi trips fell by over 90\%, FHVHV by around 80\%. Yellow and Green never fully recovered, settling at roughly a quarter of their pre-pandemic volumes, while FHVHV reached new highs by 2022. The geographic maps in T9 show that the impact and recovery were not uniform.
 
-COVID-19 caused a severe but temporary demand collapse in April 2020: Yellow and Green taxi trips fell by over 90\%, FHVHV by around 80\%. Yellow and Green never fully recovered, settling at roughly a quarter of their pre-pandemic volumes, while FHVHV reached new highs by 2022. The geographic maps in T9 show that the impact and recovery were not uniform.
+Despite serving different areas and customer bases, all four service types share essentially identical temporal patterns. Spatially, however, the services are very different: Yellow and Green have almost no geographic overlap (cosine 0.08), while FHV and FHVHV serve broadly the same city (cosine 0.85). This pattern has also appeared in the stream clustering, where BIRCH separated Yellow clusters that are more Manhattan and airport heavy from the FHVHV clusters that are more widely spread.
 
-Despite serving different areas and customer bases, all four service types share essentially identical temporal patterns. Spatially, however, the services are very different: Yellow and Green have almost no geographic overlap (cosine 0.08), while FHV and FHVHV serve broadly the same city (cosine 0.85).
-
-For storage format, Parquet with snappy compression is the clear choice for this kind of analytical workload, since it was 11 times faster to read than plain CSV in Python, competitive file size, and natively supported in both Python and Snowflake.
+We also found some interesting technical observations. For storage format, Parquet with snappy compression is the clear choice for this kind of analytical workload, since it was 11 times faster to read than plain CSV in Python, competitive file size, and natively supported in both Python and Snowflake. Doing the machine learning and city-wide demand forecasting showed that XGBoost is the most reliable model, and separate XGBoost models for each dataset achieved the best final results. External augmentation was also useful to get richer features, but it did not lead 
 
 \subsection*{Snowflake as a Big Data Platform}
 
